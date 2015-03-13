@@ -17,6 +17,8 @@ import pylab as pl
 
 import copy as cp
 
+global_dens = 501
+
 def rawread(filename):
     """
     Read rawfile named 'filename'

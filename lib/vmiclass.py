@@ -230,6 +230,25 @@ class PolarImg(np.ndarray):
 #==============================================================================
 #==============================================================================
 
+class Plotter(object):
+    """
+    Docstring
+    """
+    def __init__(self):
+        from vis import *
+
+
+class Inverter(object):
+    """
+    Docstring
+    """
+    def __init__(self, rmax=250, sigma=1.00, n_even=50):
+        self.n_funs = np.int(rad / sig)
+        self.dim = rmax + 1
+        self.lvals = n_even
+        ext = '-' + str(r_max)+'-'+str(n_even)
+
+
 if __name__ == '__main__':
     from vmivis import *
     t = RawImage(mod_home + '/ati-calibration.raw', xcntr=512, ycntr=465, radius=250)

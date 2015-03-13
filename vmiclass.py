@@ -25,9 +25,9 @@ import scipy.signal as sig
 import scipy.special as bessel
 import copy as cp
 
-import lib.vmiproc as vmp
-import lib.vminv as inv
-import lib.vmivis as vmv
+import lib.proc as vmp
+import lib.inv as inv
+import lib.vis as vmv
 
 #import matplotlib.gridspec as gridspec
 from matplotlib.widgets import Slider, Button, RadioButtons

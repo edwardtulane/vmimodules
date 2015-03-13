@@ -6,23 +6,23 @@ Created on Wed Sep 24 20:19:00 2014
 """
 
 import sys, os
-mod_home = os.path.realpath(os.path.pardir)
+mod_home = os.path.realpath(os.path.curdir)
 stor_dir = os.path.join(mod_home, 'storage')
 sys.path.insert(0, mod_home)
 
 import numpy as np
-import vmiproc as vmp
+import proc as vmp
 
-M1, M2 = vmp.iniBasex(stor_dir)
-MTM1, MTM2 = np.dot(M1.T, M1), np.dot(M2.T, M2)
-
-ab = np.load('/home/brausse/program/vmimodules/storage/ab-250-8.npy'#, mmap_mode='r'
-            )
-bs = np.load('/home/brausse/program/vmimodules/storage/bs-250-8.npy'#, mmap_mode='r'
-            )
-FtF = np.load('/home/brausse/program/vmimodules/storage/FtF-250-8.npy'#, mmap_mode='r'
-            )
-rf = np.load('/home/brausse/program/vmimodules/storage/rf-250-8.npy'#, mmap_mode='r'
+#M1, M2 = vmp.iniBasex(stor_dir+'/')
+#MTM1, MTM2 = np.dot(M1.T, M1), np.dot(M2.T, M2)
+#
+#ab = np.load('/home/brausse/program/vmimodules/storage/ab-250-8.npy'#, mmap_mode='r'
+#            )
+#bs = np.load('/home/brausse/program/vmimodules/storage/bs-250-8.npy'#, mmap_mode='r'
+#            )
+#FtF = np.load('/home/brausse/program/vmimodules/storage/FtF-250-8.npy'#, mmap_mode='r'
+#            )
+#rf = np.load('/home/brausse/program/vmimodules/storage/rf-250-8.npy'#, mmap_mode='r'
             )
 
 

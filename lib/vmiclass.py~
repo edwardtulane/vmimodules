@@ -202,14 +202,14 @@ class RectImg(np.ndarray):
         return np.ndarray.__new__(self, shape=size, dtype=np.float_,
                                   buffer=frame.copy().data, order='C')
 
-    def pBasex(self):
-        fold = vmp.fold(self, 1, 1)
-        return vminv.invertPolBasex(fold)
+#   def pBasex(self):
+#       fold = vmp.fold(self, 1, 1)
+#       return vminv.invertPolBasex(fold)
 
-    def Basex(self):
-        frame = vmp.crop_circle(self, rmax=self.rad_sq)
-        bsx = vminv.invertBasex(frame)
-        return Frame(bsx)
+#   def Basex(self):
+#       frame = vmp.crop_circle(self, rmax=self.rad_sq)
+#       bsx = vminv.invertBasex(frame)
+#       return Frame(bsx)
 
 #==============================================================================
 
@@ -230,9 +230,26 @@ class PolarImg(np.ndarray):
 #==============================================================================
 #==============================================================================
 
+class Plotter(object):
+    """
+    Docstring
+    """
+    def __init__(self):
+        from vis import *
+
+
+class Inverter(object):
+    """
+    Docstring
+    """
+    def __init__(self, rmax=250, sigma=1.00, n_even=40):
+        n_funs = np.int(rad / sig)
+        ext = '-' + str(r_max)+'-'+str(n_even)
+
+
 if __name__ == '__main__':
     from vmivis import *
-    t = RawImage('ati-calibration.raw', xcntr=512, ycntr=465, radius=250)
+    t = RawImage(mod_home + '/ati-calibration.raw', xcntr=512, ycntr=465, radius=250)
     f = t.cropsquare()
     f.interpol()
     r = f.evalrect()

@@ -5,10 +5,15 @@ Created on Wed Sep 24 20:19:00 2014
 @author: brausse
 """
 
+import sys, os
+mod_home = os.path.realpath(os.path.curdir)
+stor_dir = os.path.join(mod_home, 'storage')
+sys.path.insert(0, mod_home)
+
 import numpy as np
 import proc as vmp
 
-M1, M2 = vmp.iniBasex('/home/brausse/program/vmimodules/storage/')
+M1, M2 = vmp.iniBasex(stor_dir+'/')
 MTM1, MTM2 = np.dot(M1.T, M1), np.dot(M2.T, M2)
 
 ab = np.load('/home/brausse/program/vmimodules/storage/ab-250-8.npy'#, mmap_mode='r'

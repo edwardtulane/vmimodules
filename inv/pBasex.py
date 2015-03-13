@@ -128,8 +128,8 @@ def AbelInt(f):
 
 if __name__ == '__main__':
 
-    r_max = 250
-    sigma = 1.00
+    r_max = 450
+    sigma = 1.50
     n_even = 50
     n_odd = 0
 

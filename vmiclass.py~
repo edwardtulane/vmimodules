@@ -25,9 +25,9 @@ import scipy.signal as sig
 import scipy.special as bessel
 import copy as cp
 
-import lib.vmiproc as vmp
-import lib.vminv as inv
-import lib.vmivis as vmv
+import lib.proc as vmp
+import lib.inv as inv
+import lib.ivis as vmv
 
 #import matplotlib.gridspec as gridspec
 from matplotlib.widgets import Slider, Button, RadioButtons
@@ -212,7 +212,7 @@ class VMIimage(object):
         """ Iterate 'eval_sym' with a bound BFGS alg. verbosely ('disp') """
         init_vec = [0, 0, 0]
         domain = np.tile([-90, 90], 3).reshape(3, 2)
-        self.res = opt.minimize(self.__eval_sym2, init_vec,
+        self.res = opt.minimize(self.__eval_sym, init_vec,
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
