@@ -13,7 +13,7 @@ TODO:
 """
 
 import sys, os, warnings
-mod_home = os.path.realpath(os.path.pardir)
+mod_home = os.path.realpath(os.path.curdir)
 stor_dir = os.path.join(mod_home, 'storage')
 sys.path.insert(0, mod_home)
 
@@ -22,7 +22,7 @@ import scipy as sp
 
 import pylab as pl
 
-# import scipy.fftpack as fft
+import scipy.fftpack as fft
 import scipy.ndimage as ndimg
 import scipy.ndimage.interpolation as ndipol
 import scipy.optimize as opt
@@ -34,6 +34,8 @@ import proc as vmp
 import inv as vminv
 #import matplotlib.gridspec as gridspec
 #from matplotlib.widgets import Slider, Button, RadioButtons
+import vmimodules.conf
+global_dens = vmimodules.conf.global_dens
 
 
 class RawImage(np.ndarray):
@@ -114,7 +116,7 @@ class Frame(np.ndarray):
             self.ck = ndimg.rotate(self.__ck, phi,
                                reshape=False, prefilter=False)
 
-    def evalrect(self, density=vmp.global_dens, displace=[0., 0.], phi=0):
+    def evalrect(self, density=global_dens, displace=[0., 0.], phi=0):
         """ Project the image onto a rectangular grid with given spacing """
         self.__rotateframe(self.offset + self.disp[0] +  phi)
         coords = vmp.gen_rect(self.diam, density, self.disp[1:] + displace)
@@ -147,23 +149,25 @@ class Frame(np.ndarray):
     def __eval_sym(self, delta):
         """ Returns the total imaginary part of the 2D FFT of self.rect """
 #        self.rotateframe(self.offset + self.disp[0] + delta[0])
-        self.evalrect(self.dens_rect, delta[1:], phi=delta[0])
-        ft = fft.fft2(self.rect)
+        delta[0] = 0.0
+        rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
+        ft = fft.fft2(rect_in)
         return abs(ft.imag).sum()
 
     def __eval_sym2(self, delta):
         """ Use Bordas' criterion. I found it to be inferior """
 #        self.rotateframe(self.offset + self.disp[0] + delta[0])
-        self.evalrect(self.dens_rect, delta[1:], phi=0)
-        rect_in = cp.copy(self.rect)
+        delta[0] = 0.0
+        rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
+#       rect_in = self.rect.copy()
         Tstar = np.flipud(np.fliplr(rect_in))
         return -1 * np.sum(rect_in * Tstar)
 
     def __eval_sym3(self, delta):
         pinv = np.load('storage/inv-200-cos2.npy', mmap_mode='r')
         ab = np.load('storage/ab-200-cos2.npy', mmap_mode='r')
-        self.rotateframe(self.offset + self.disp[0] + delta[0])
-        self.evalrect(self.dens_rect, delta[1:])
+        self.__rotateframe(self.offset + self.disp[0] + delta[0])
+        self.evalrect(global_dens, delta[1:])
         rfold = vmp.fold(self.rect, h=1)
         a_cos2 = np.dot(pinv.T, rfold.ravel())
         recon = np.dot(ab, a_cos2)
@@ -175,15 +179,14 @@ class Frame(np.ndarray):
         meth_d = {1: self.__eval_sym, 2: self.__eval_sym2, 3: self.__eval_sym3}
         domain = np.tile([-90, 90], 3).reshape(3, 2)
         self.res = opt.minimize(meth_d[method], init_vec,
-                init_vec,
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
             print 'Writing optimized centre and angular offset'
             self.disp += self.res.x
         # Final evaluation
-        self.rotateframe(self.offset + self.disp[0])
-        self.evalrect(self.dens_rect)
+        self.__rotateframe(self.offset + self.disp[0])
+        self.evalrect(global_dens)
 
 class RectImg(np.ndarray):
     """
@@ -230,35 +233,18 @@ class PolarImg(np.ndarray):
 #==============================================================================
 #==============================================================================
 
-class Plotter(object):
-    """
-    Docstring
-    """
-    def __init__(self):
-        from vis import *
-
-
-class Inverter(object):
-    """
-    Docstring
-    """
-    def __init__(self, rmax=250, sigma=1.00, n_even=50):
-        self.n_funs = np.int(rad / sig)
-        self.dim = rmax + 1
-        self.lvals = n_even
-        ext = '-' + str(r_max)+'-'+str(n_even)
 
 
 if __name__ == '__main__':
-    from vmivis import *
+    from vis import *
     t = RawImage(mod_home + '/ati-calibration.raw', xcntr=512, ycntr=465, radius=250)
     f = t.cropsquare()
     f.interpol()
     r = f.evalrect()
-    bsx = r.pBasex()
-    fold = vminv.pbsx2fold(bsx)
-    inv = vmp.unfold(fold, 1,1)
-    logplot(inv)
+#   bsx = r.pBasex()
+#   fold = vminv.pbsx2fold(bsx)
+#   inv = vmp.unfold(fold, 1,1)
+#   logplot(inv)
 #    a = r.view(Frame)
 #    a.interpol()
 #    a.evalpolar()

@@ -14,19 +14,19 @@ close('all')
 
 VMIdir = '/home/brausse/vmi/'
 
-if 'ab' not in dir():
-    ab = np.load(commpath + 'storage/ab-250-18.npy', mmap_mode='r'
-                )
-                
-if 'bs' not in dir():
-    bs = np.load(commpath + 'storage/bs-250-18.npy' #, mmap_mode='r'
-                )
-                
-if 'FtF' not in dir():
-    FtF = np.load(commpath + 'storage/FtF-250-18.npy', mmap_mode='r'
-                )    
-
-
+#if 'ab' not in dir():
+#    ab = np.load(commpath + 'storage/ab-250-18.npy', mmap_mode='r'
+#                )
+#                
+#if 'bs' not in dir():
+#    bs = np.load(commpath + 'storage/bs-250-18.npy' #, mmap_mode='r'
+#                )
+#                
+#if 'FtF' not in dir():
+#    FtF = np.load(commpath + 'storage/FtF-250-18.npy', mmap_mode='r'
+#                )    
+#
+#
 
 
 #broadband = {}
