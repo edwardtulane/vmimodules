@@ -1,1 +1,1 @@
-global_dens = 501
+global_dens = 301

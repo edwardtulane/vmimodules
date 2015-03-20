@@ -1,0 +1,5 @@
+disps
+ed process-electrons.py
+ed process-electrons.py
+opt.minimize(vmp.find_bg_fac, [2.0], bounds=[[0.1, 5.0]], args=(frames[26], frames[-1]), method='L-BFGS-B')
+%history -f opt

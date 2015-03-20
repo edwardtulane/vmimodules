@@ -164,14 +164,19 @@ class Frame(np.ndarray):
         return -1 * np.sum(rect_in * Tstar)
 
     def __eval_sym3(self, delta):
-        pinv = np.load('storage/inv-200-cos2.npy', mmap_mode='r')
-        ab = np.load('storage/ab-200-cos2.npy', mmap_mode='r')
-        self.__rotateframe(self.offset + self.disp[0] + delta[0])
-        self.evalrect(global_dens, delta[1:])
-        rfold = vmp.fold(self.rect, h=1)
-        a_cos2 = np.dot(pinv.T, rfold.ravel())
-        recon = np.dot(ab, a_cos2)
-        return   np.linalg.norm(rfold.ravel() - recon)
+        delta[0] = 0.0
+        rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
+#       rect_in = self.rect.copy()
+        Tstar = np.flipud(np.fliplr(rect_in))
+        return -1 * np.linalg.norm(ndimg.laplace(rect_in * Tstar))
+#       pinv = np.load('storage/inv-200-cos2.npy', mmap_mode='r')
+#       ab = np.load('storage/ab-200-cos2.npy', mmap_mode='r')
+#       self.__rotateframe(self.offset + self.disp[0] + delta[0])
+#       self.evalrect(global_dens, delta[1:])
+#       rfold = vmp.fold(self.rect, h=1)
+#       a_cos2 = np.dot(pinv.T, rfold.ravel())
+#       recon = np.dot(ab, a_cos2)
+#       return   np.linalg.norm(rfold.ravel() - recon)
 
     def find_centre(self, method=2):
         """ Iterate 'eval_sym' with a bound BFGS alg. verbosely ('disp') """

@@ -7,10 +7,13 @@ Created on Wed Sep 24 20:19:00 2014
 
 import sys, os
 mod_home = os.path.realpath(os.path.curdir)
+mod_home=os.path.expanduser('~/program/vmimodules')
 stor_dir = os.path.join(mod_home, 'storage')
 sys.path.insert(0, mod_home)
 
 import numpy as np
+import scipy.special as spc
+import scipy.integrate as integ
 import proc as vmp
 
 
@@ -18,19 +21,21 @@ class Inverter(object):
     """
     Docstring
     """
-    def __init__(self, r_max=250, n_even=50, dir=stor_dir):
+    def __init__(self, r_max=250, n_even=50, dir=stor_dir, dryrun=0):
         self.__ext = '-' + str(r_max)+'-'+str(n_even)
-        self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
+        if not dryrun:
+            self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
+            self.FtF = np.load(stor_dir + '/FtF' + self.__ext + '.npy')
+            self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
+            self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
+                    self.__M2.T, self.__M2),
         self.bs = np.load(stor_dir + '/bs' + self.__ext + '.npy')
-        self.FtF = np.load(stor_dir + '/FtF' + self.__ext + '.npy')
         self.rf = np.load(stor_dir + '/rf' + self.__ext + '.npy')
         self.lvals = (n_even / 2) + 1
-        self.n_funs = self.ab.shape[0] / self.lvals
+        self.n_funs = self.bs.shape[1] / self.lvals
         self.dim = r_max + 1
-
-        self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
-        self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(self.__M2.T, self.__M2),
-
+        self.beta_vec = self.gen_beta_vec(self.lvals)
+        self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
 
     def invertFourierHankel(self, arr):
@@ -81,15 +86,39 @@ class Inverter(object):
 
     def pbsx2fold(self, pbsx):
             fold = np.dot(pbsx, self.bs.T)
-            fold.shape = (251, 251)
+            fold.shape = (self.dim, self.dim)
             return fold
 
     def pbsx2rad(self, pbsx):
-            int = np.dot(pbsx[:166], rf.T)
-            beta = np.dot(pbsx[166:2 * 166], rf.T)
+            int = np.dot(pbsx[:self.n_funs], rf.T)
+            beta = np.dot(pbsx[self.n_funs:2 * self.nfuns], rf.T)
             return int, beta
 
     #    def pbsx2fold(pbsx):
     #            inv = np.dot(pbsx, bs.T)
     #        inv.shape = (251,251)
     #        return inv
+    def gen_beta_vec(self, lvals):
+        ll = np.arange(lvals) * 2
+        th = np.linspace(0, np.pi, 2**20+1)
+        beta_vec = np.zeros(lvals)
+        for i, l in enumerate(ll): 
+            up = spc.eval_legendre(l, np.cos(th)) ** 2 * np.sin(th) * np.cos(th) ** 2
+            lo = spc.eval_legendre(l, np.cos(th)) ** 2 * np.sin(th)
+            beta_vec[i] = integ.romb(up) / integ.romb(lo)
+        return beta_vec
+
+    def gen_lfuns(self, lvals):
+        ll = np.arange(lvals) * 2
+        th = np.linspace(0, np.pi, 2**15+1)
+        lfuns = np.zeros((lvals, 2**15+1))
+        for i, l in enumerate(ll): 
+            lfuns[i] = spc.eval_legendre(l, np.cos(th))
+        return th, lfuns
+
+    def get_beta_map(self, pbsx):
+        pbsx.shape = (pbsx.shape[0], self.lvals, -1)
+        dists = np.dot(pbsx.swapaxes(1,2), self.lfuns)
+        lo = dists ** 2 # * np.sin(self.th)
+        up = lo * np.cos(self.th) ** 2
+        return integ.romb(up, axis=2) / integ.romb(lo, axis=2)
