@@ -279,9 +279,9 @@ def halves(img_in):
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
 
-def find_bg_fac(fac, fra, frb):
-    sub = fra - fac * frb
-    return quadrants(sub).std(axis=(0)).sum()
+#def find_bg_fac(fac, fra, frb):
+#    sub = fra - fac * frb
+#    return quadrants(sub).std(axis=(0)).sum()
     
     
 if __name__ == '__main__':

@@ -77,9 +77,9 @@ class RawImage(np.ndarray):
         return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
                                   buffer=raw.copy(), order='C')
 
-    def cropsquare(self):
+    def cropsquare(self, offset=0):
         cropd = vmp.centre_crop(self, self.cx, self.cy, self.rad_sq)
-        return Frame(cropd)
+        return Frame(cropd, offset)
 
 #==============================================================================
 
@@ -99,9 +99,12 @@ class Frame(np.ndarray):
         self.disp = [0.0, 0.0, 0.0]
         self.clrmap = pl.cm.gnuplot2
 
+#       if do_intpol:
+#           self.interpol(self)
+#       This doesn't work, requires a Frame instance. __init__() breaks __new__
+
         return np.ndarray.__new__(self, shape=size, buffer=frame.copy().data,
                                   dtype=frame.dtype.name, order='C')
-
 ###
 
     def interpol(self, smooth=0.0):
@@ -148,7 +151,6 @@ class Frame(np.ndarray):
 
     def __eval_sym(self, delta):
         """ Returns the total imaginary part of the 2D FFT of self.rect """
-#        self.rotateframe(self.offset + self.disp[0] + delta[0])
         delta[0] = 0.0
         rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
         ft = fft.fft2(rect_in)
@@ -156,33 +158,50 @@ class Frame(np.ndarray):
 
     def __eval_sym2(self, delta):
         """ Use Bordas' criterion. I found it to be inferior """
-#        self.rotateframe(self.offset + self.disp[0] + delta[0])
         delta[0] = 0.0
         rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
 #       rect_in = self.rect.copy()
         Tstar = np.flipud(np.fliplr(rect_in))
         return -1 * np.sum(rect_in * Tstar)
 
-    def __eval_sym3(self, delta):
-        delta[0] = 0.0
-        rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
-#       rect_in = self.rect.copy()
-        Tstar = np.flipud(np.fliplr(rect_in))
-        return -1 * np.linalg.norm(ndimg.laplace(rect_in * Tstar))
-#       pinv = np.load('storage/inv-200-cos2.npy', mmap_mode='r')
-#       ab = np.load('storage/ab-200-cos2.npy', mmap_mode='r')
-#       self.__rotateframe(self.offset + self.disp[0] + delta[0])
-#       self.evalrect(global_dens, delta[1:])
-#       rfold = vmp.fold(self.rect, h=1)
-#       a_cos2 = np.dot(pinv.T, rfold.ravel())
-#       recon = np.dot(ab, a_cos2)
-#       return   np.linalg.norm(rfold.ravel() - recon)
+    def __eval_sym3(self, delta, inv):
+        rect_in = self.evalrect(301,  delta[1:], phi=delta[0])
+        quads = vmp.quadrants(rect_in)
+        pb = np.zeros((4, inv.FtF.shape[0]))
+        for k, img in enumerate(quads):
+            pb[k] = inv.invertPolBasex(img)
+        dev = pb[:3].std(axis=0).sum()
+        return dev
 
-    def find_centre(self, method=2):
-        """ Iterate 'eval_sym' with a bound BFGS alg. verbosely ('disp') """
+
+    def centre_pbsx(self, cntr=True, ang=True):
+        """ Brute Force centering with the pBasex method """
         init_vec = [0, 0, 0]
-        meth_d = {1: self.__eval_sym, 2: self.__eval_sym2, 3: self.__eval_sym3}
-        domain = np.tile([-90, 90], 3).reshape(3, 2)
+        inv = vminv.Inverter(150, 8)
+        domain = np.tile([-15, 15], 3).reshape(3, 2)
+        if not cntr:
+            domain[1:] = 0.0
+        if not ang:
+            domain[0] = 0.0
+        self.res = opt.minimize(self.__eval_sym3, init_vec, args=inv,
+                                method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
+                                tol=1E-5, options={'disp': True})
+        if self.res.success:
+            print 'Writing optimised centre and angular offset'
+            self.disp += self.res.x
+        del inv
+
+    def find_centre(self, method=2, cntr=True, ang=True):
+        """ Iterate 'eval_sym' with a bound BFGS alg. verbosely ('disp') 
+            More or less deprecated """
+
+        init_vec = [0, 0, 0]
+        meth_d = {1: self.__eval_sym, 2: self.__eval_sym2}
+        domain = np.tile([-10, 10], 3).reshape(3, 2)
+        if not cntr:
+            domain[1:] = 0.0
+        if not ang:
+            domain[0] = 0.0
         self.res = opt.minimize(meth_d[method], init_vec,
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
@@ -193,7 +212,7 @@ class Frame(np.ndarray):
         self.__rotateframe(self.offset + self.disp[0])
         self.evalrect(global_dens)
 
-class RectImg(np.ndarray):
+class RectImg(Frame):
     """
     Docstring
     """
@@ -210,14 +229,29 @@ class RectImg(np.ndarray):
         return np.ndarray.__new__(self, shape=size, dtype=np.float_,
                                   buffer=frame.copy().data, order='C')
 
-#   def pBasex(self):
-#       fold = vmp.fold(self, 1, 1)
-#       return vminv.invertPolBasex(fold)
+    def __eval_bg_fac(self, fac, bg, inv):
+        frame = Rect(self - fac * bg)
 
-#   def Basex(self):
-#       frame = vmp.crop_circle(self, rmax=self.rad_sq)
-#       bsx = vminv.invertBasex(frame)
-#       return Frame(bsx)
+        quads = vmp.quadrants(frame)
+        pb = np.zeros((4, inv.FtF.shape[0]))
+        for k, img in enumerate(quads):
+            pb[k] = inv.invertPolBasex(img)
+        dev = pb[:3].std(axis=0).sum()
+        return dev
+
+
+    def find_bg_fac(self, bg):
+        """ Subtract a background image with an optimised factor """
+        init_vec = [0]
+        inv = vminv.Inverter(150, 8)
+        domain = [0, 2]
+        self.bg_fac = opt.minimize(self.__eval_bg_fac, init_vec, args=(bg, inv),
+                                method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
+                                tol=1E-5, options={'disp': True})
+        if self.res.success:
+            print 'Found optimum factor: ', self.bg_fac.x
+        del inv
+        return Rect(self - bg * self.bg_fac.x)
 
 #==============================================================================
 
