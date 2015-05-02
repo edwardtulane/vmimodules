@@ -5,10 +5,52 @@ Created on Fri Aug 22 01:27:08 2014
 @author: felix
 """
 
+import numpy as np
+from scipy.special import factorial as fact
 # basex basis set
 
-def rho_k(r, ksq, sma):
-#    ksq = k ** 2
+def R_k(r, k, sigma):
+    k_sq = (k ** 2).astype(np.float_)
+    u = r / sigma
+    u_sq = u ** 2
+    exponent = k_sq - u_sq + k_sq * np.log(u_sq / k_sq)
+    return np.exp(exponent)
+
+def X(r, k, sigma):
+    k_sq = np.float(k ** 2)
+    u = r / sigma
+    u_sq = u ** 2
+
+    ll = np.arange(0, k + 1).astype(np.float_) ** 2
+    gam = gamma_approx(ll)
+    alph = aleph(ll)
+    X_mat = np.zeros((k_sq, r.shape[0]))
+    k_vec = np.arange(k + 1)
+    X_mat =  R_k(r, k_vec[:, None], sigma)
+    X_mat /= gam[::-1, None]
+    return np.sum(X_mat[:-1] * alph[::-1, None], axis=0)
+
+def gamma(ll):
+#    ll = np.arange(0, l + 1) ** 2
+    return (np.e / ll) ** ll * fact(ll)
+
+def gamma_approx(ll):
+    coeffs = np.array([1, 1/12., 1/288., -139/51840., -571/2488320.])
+    exps = np.arange(5) * -1
+    return np.sqrt(2 * np.pi * ll) * (coeffs[:, None] * (ll ** exps[:, None])).sum(0)
+
+def aleph(m):
+    ll_a = np.ones(m.shape[0] - 1)
+#    m = np.arange(1, l + 1).astype(np.float) ** 2
+    ll_a = ll_a - 1 / (2 * m[1::])
+    return ll_a.cumprod()
+
+###
+###
+###
+# old attempts
+def rho_k(r, k, sma):
+    ksq = np.float(k ** 2)
     res = ((np.e / ksq) ** ksq) * ((r / sma) ** (2 * ksq) ) * \
     np.exp(-(r / sma) ** 2)
     return res
