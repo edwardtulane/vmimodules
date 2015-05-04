@@ -11,24 +11,37 @@ from scipy.special import factorial as fact
 
 def R_k(r, k, sigma):
     k_sq = (k ** 2).astype(np.float_)
+    k_sq = k_sq[k_sq > 0.0, None]
     u = r / sigma
     u_sq = u ** 2
-    exponent = k_sq - u_sq + k_sq * np.log(u_sq / k_sq)
+    exponent = np.zeros((len(k), len(r)))
+    exponent[:] =  -1 * u_sq
+    exponent[k.ravel() > 0] += k_sq + k_sq * np.log(u_sq / k_sq)
     return np.exp(exponent)
 
 def X(r, k, sigma):
     k_sq = np.float(k ** 2)
     u = r / sigma
-    u_sq = u ** 2
 
-    ll = np.arange(0, k + 1).astype(np.float_) ** 2
+    ll = np.arange(0, k ** 2 + 1)
+    print 'Setting up the coefficients'
     gam = gamma_approx(ll)
-    alph = aleph(ll)
-    X_mat = np.zeros((k_sq, r.shape[0]))
+    alph = aleph(ll.astype(np.float_))
+    R_mat = np.zeros((k_sq, r.shape[0]))
+    X_mat = np.zeros((k + 1, r.shape[0]))
     k_vec = np.arange(k + 1)
-    X_mat =  R_k(r, k_vec[:, None], sigma)
-    X_mat /= gam[::-1, None]
-    return np.sum(X_mat[:-1] * alph[::-1, None], axis=0)
+    R_mat =  R_k(r, np.sqrt(ll), sigma)
+#   X_mat /= gam[::-1, None]
+#   return np.sum(X_mat * alph[::-1, None], axis=0) * 2 * gam[-1]
+#   frac = alph[::-1] / gam
+#   frac = frac[:, None]
+    print 'Filling the Abel-transformed matrix'
+    for i, k2 in enumerate(k_vec**2):
+        X_mat[i] = np.sum(alph[k2::-1, None] * R_mat[:k2+1] / gam[:k2+1, None], axis=0)
+        X_mat[i] *= 2 * gam[k2]
+        print('%i -' % i)
+
+    return X_mat
 
 def gamma(ll):
 #    ll = np.arange(0, l + 1) ** 2
@@ -37,12 +50,14 @@ def gamma(ll):
 def gamma_approx(ll):
     coeffs = np.array([1, 1/12., 1/288., -139/51840., -571/2488320.])
     exps = np.arange(5) * -1
-    return np.sqrt(2 * np.pi * ll) * (coeffs[:, None] * (ll ** exps[:, None])).sum(0)
+    ll =  np.sqrt(2 * np.pi * ll) * (coeffs[:, None] * (ll ** exps[:, None])).sum(0)
+    ll[0] = 1
+    return ll
 
 def aleph(m):
-    ll_a = np.ones(m.shape[0] - 1)
+    ll_a = np.ones(m.shape[0])
 #    m = np.arange(1, l + 1).astype(np.float) ** 2
-    ll_a = ll_a - 1 / (2 * m[1::])
+    ll_a[1::] = ll_a[1::] - (1 / (2 * m[1::]))
     return ll_a.cumprod()
 
 ###
@@ -56,37 +71,27 @@ def rho_k(r, k, sma):
     return res
 
 def iter_prod(ksq):
-    k_vec = np.arange(ksq)
-    res_prod = np.empty(k_vec.shape)
-    for l in k_vec:
-        l_prod = 1
-        for m in np.arange(1, l + 1):
-            l_prod *= ((ksq + 1 - m) * (m - 0.5)) / m
-        res_prod[l] = l_prod
-
-    return res_prod
+    k_vec = np.arange(ksq) + 1
+    k_vec = k_vec[:, None]
+    res_prod = np.ones(k_vec.shape)
+    res_prod += ksq - k_vec
+    m = k_vec - 0.5
+    res_prod = (res_prod * m) / k_vec
+    return np.cumproduct(res_prod.ravel())
 
 def iter_sum(x, ksq, sma):
     try: type(ksq) == int
     except: TypeError('k must be an int')
 #    res_sum = np.ones(ksq, ksq, x.shape[0])
 
-    k_vec = np.arange(1, ksq + 1)
+    k_vec = np.arange(ksq) + 1
+    chi = np.zeros((ksq, len(x)))
 #    res_prod = np.empty([k_vec.shape[0], x.shape[0]])
 #    for i, l in enumerate(k_vec):
-    l_prod = np.empty(ksq)
-    tmp_prod = 1.
-    for i, m in enumerate(k_vec):
-        tmp_prod *= ((ksq + 1 - m) * (m - 0.5)) / m
-        l_prod[i] = tmp_prod
-#    res_prod[i] = l_prod * (x / sma) ** (-2 * l)
-#    res_sum = res_prod.sum(axis=0)
+    l_prod = iter_prod(ksq)[:, None]
+    chi = (x / sma) ** (-2 * k_vec[:, None])
 
-#    for l in np.arange(1, ksq + 1):
-#        res_prod = iter_prod(ksq, l)
-#        res_sum += (x / sma) ** (-2 * l) * res_prod
-
-    return l_prod
+    return chi, l_prod
 
 def chi_k(x, k, sma):
     ksq = k ** 2

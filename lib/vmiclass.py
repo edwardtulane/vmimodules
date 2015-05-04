@@ -164,8 +164,8 @@ class Frame(np.ndarray):
         Tstar = np.flipud(np.fliplr(rect_in))
         return -1 * np.sum(rect_in * Tstar)
 
-    def __eval_sym3(self, delta, inv):
-        rect_in = self.evalrect(301,  delta[1:], phi=delta[0])
+    def __eval_sym3(self, delta, inv, dens):
+        rect_in = self.evalrect(501,  delta[1:], phi=delta[0])
         quads = vmp.quadrants(rect_in)
         pb = np.zeros((4, inv.FtF.shape[0]))
         for k, img in enumerate(quads):
@@ -174,16 +174,16 @@ class Frame(np.ndarray):
         return dev
 
 
-    def centre_pbsx(self, cntr=True, ang=True):
+    def centre_pbsx(self, cntr=True, ang=False, dens=501):
         """ Brute Force centering with the pBasex method """
         init_vec = [0, 0, 0]
-        inv = vminv.Inverter(150, 8)
+        inv = vminv.Inverter(250, 8)
         domain = np.tile([-15, 15], 3).reshape(3, 2)
         if not cntr:
             domain[1:] = 0.0
         if not ang:
             domain[0] = 0.0
-        self.res = opt.minimize(self.__eval_sym3, init_vec, args=inv,
+        self.res = opt.minimize(self.__eval_sym3, init_vec, args=(inv, dens),
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:

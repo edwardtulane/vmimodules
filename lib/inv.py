@@ -89,10 +89,15 @@ class Inverter(object):
             fold.shape = (self.dim, self.dim)
             return fold
 
+    def pbsx2ab(self, pbsx):
+            fold = np.dot(pbsx, self.ab)
+            fold.shape = (self.dim, self.dim)
+            return fold
+
     def pbsx2rad(self, pbsx):
-            int = np.dot(pbsx[:self.n_funs], rf.T)
-            beta = np.dot(pbsx[self.n_funs:2 * self.nfuns], rf.T)
-            return int, beta
+            pbsx.shape = (-1, self.n_funs)
+            dist = np.dot(pbsx, self.rf.T)
+            return dist
 
     #    def pbsx2fold(pbsx):
     #            inv = np.dot(pbsx, bs.T)

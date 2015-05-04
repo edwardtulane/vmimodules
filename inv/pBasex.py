@@ -48,6 +48,7 @@ def gen_bas(rad, sig, lev, lodd, cos2=False):
         if Rn:
             r_basis[n] += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
         r_funs[n] = r_basis[n, 0, :]
+
     # evaluate angular basis set
 
     th = np.arctan2(XY, XY[:,None])[rad:,rad:]
@@ -71,6 +72,38 @@ def gen_bas(rad, sig, lev, lodd, cos2=False):
         for j, th_im in enumerate(ang_basis):
             polar_basis[i + j * n_funs] = r_im * th_im
     return polar_basis, r_funs
+
+### 2015-05-04: reworking things a bit with an interpolated basis set
+
+def gen_rad_bas(rad, sig, blowup=1):
+    n_funs = np.int(rad / sig)
+    sig_sq = sig ** 2
+    XY = np.linspace(0, rad, (rad * blowup) + 1)
+    diam = XY.shape[0]
+    R = np.sqrt(XY ** 2 + XY[:, None] ** 2)#[rad:, rad:]
+    r_basis = np.zeros([n_funs, diam, diam])
+    r_funs = np.empty([n_funs, diam])
+    for n in np.arange(n_funs):
+        Rn = n * sig
+        r_basis[n] = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
+        if Rn:
+            r_basis[n] += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
+        r_funs[n] = r_basis[n, 0, :]
+    return r_basis, r_funs
+
+def gen_ang_bas(leven):
+    th = np.arctan2(XY, XY[:,None])[rad:,rad:]
+    n_lev = np.arange(lev + 1)
+    n_lodd = np.arange(lodd + 1)
+
+    n_l = np.hstack((n_lev[0::2], n_lodd[1::2]))
+
+    ang_basis = np.empty([n_l.shape[0], rad +1, rad + 1])
+    for i, k in enumerate(n_l):
+        ang_basis[i] = legfuns.eval_legendre(k, np.cos(th))
+    polar_basis = np.empty([n_funs * n_l.shape[0], rad +1, rad + 1])
+
+
 
 
 ### state-variable Abel transform
@@ -114,7 +147,7 @@ def AbelInt(f):
     """Does the Abel integral numerically and linewise. n.b.: super slow!"""
     int = np.zeros(f.shape)
     err = np.zeros(f.shape)
-    r = np.arange(f.shape[1])
+    r = np.arange(f.shape[-1])
     for i, line in enumerate(f):
         print i
         ck = intpol.splrep(r, line)
@@ -127,7 +160,8 @@ def AbelInt(f):
 
 
 if __name__ == '__main__':
-
+    pass
+else:
     r_max = 150
     sigma = 2.00
     n_even = 8
