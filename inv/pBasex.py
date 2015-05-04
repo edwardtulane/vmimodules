@@ -27,7 +27,7 @@ import scipy.interpolate as intpol
 
 
 
-def gen_bas(rad, sig, lev, lodd, cos2=False):
+def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
     """Generate a basis set of radial Gaussians and Legendre pols.
     sig determines the step width, l the number of polynomials;
     Returns the upper right corner with even ls
@@ -36,12 +36,12 @@ def gen_bas(rad, sig, lev, lodd, cos2=False):
     # evaluate radial basis set
     n_funs = np.int(rad / sig)
     sig_sq = sig ** 2
-    XY = np.arange(-1 * rad, rad +1,dtype='float64')
+    XY = np.arange(-1 * rad * blowup, (rad * blowup) +1,dtype='float64')
     diam = XY.shape[0]
     R = np.sqrt(XY ** 2 + XY[:, None] ** 2)[rad:, rad:]
 #    R2 = R ** 2
-    r_basis = np.empty([n_funs, rad + 1, rad + 1])
-    r_funs = np.empty([n_funs, rad + 1])
+    r_basis = np.zeros([n_funs, rad + 1, rad + 1])
+    r_funs = np.zeros([n_funs, rad + 1])
     for n in np.arange(n_funs):
         Rn = n * sig
         r_basis[n] = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
@@ -58,14 +58,14 @@ def gen_bas(rad, sig, lev, lodd, cos2=False):
     n_l = np.hstack((n_lev[0::2], n_lodd[1::2]))
 
     if cos2:
-        ang_basis = np.empty([1, rad +1, rad + 1])
+        ang_basis = np.zeros([1, rad +1, rad + 1])
         ang_basis[0] = np.cos(th) ** 2
-        polar_basis = np.empty([n_funs, rad +1, rad + 1])
+        polar_basis = np.zeros([n_funs, rad +1, rad + 1])
     else:
-        ang_basis = np.empty([n_l.shape[0], rad +1, rad + 1])
+        ang_basis = np.zeros([n_l.shape[0], rad +1, rad + 1])
         for i, k in enumerate(n_l):
             ang_basis[i] = legfuns.eval_legendre(k, np.cos(th))
-        polar_basis = np.empty([n_funs * n_l.shape[0], rad +1, rad + 1])
+        polar_basis = np.zeros([n_funs * n_l.shape[0], rad +1, rad + 1])
 
     # multiply them
     for i, r_im in enumerate(r_basis):
@@ -74,6 +74,7 @@ def gen_bas(rad, sig, lev, lodd, cos2=False):
     return polar_basis, r_funs
 
 ### 2015-05-04: reworking things a bit with an interpolated basis set
+### later that night: this is useless
 
 def gen_rad_bas(rad, sig, blowup=1):
     n_funs = np.int(rad / sig)
@@ -82,27 +83,28 @@ def gen_rad_bas(rad, sig, blowup=1):
     diam = XY.shape[0]
     R = np.sqrt(XY ** 2 + XY[:, None] ** 2)#[rad:, rad:]
     r_basis = np.zeros([n_funs, diam, diam])
-    r_funs = np.empty([n_funs, diam])
-    for n in np.arange(n_funs):
-        Rn = n * sig
-        r_basis[n] = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
-        if Rn:
-            r_basis[n] += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
-        r_funs[n] = r_basis[n, 0, :]
+    r_funs = np.zeros([n_funs, diam])
+    Rn = np.arange(n_funs + 1)
+    Rn *= sig
+    Rn = Rn[:, None, None]
+    r_basis = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
+    r_basis += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
+    r_funs = r_basis[:, 0, :]
     return r_basis, r_funs
 
-def gen_ang_bas(leven):
-    th = np.arctan2(XY, XY[:,None])[rad:,rad:]
+def gen_ang_bas(rad, lev, lodd=0, blowup=1):
+    XY = np.linspace(0, rad, (rad * blowup) + 1)
+    diam = XY.shape[0]
+    th = np.arctan2(XY, XY[:,None])#[rad:,rad:]
     n_lev = np.arange(lev + 1)
     n_lodd = np.arange(lodd + 1)
 
     n_l = np.hstack((n_lev[0::2], n_lodd[1::2]))
+    n_l = n_l[:, None, None]
 
-    ang_basis = np.empty([n_l.shape[0], rad +1, rad + 1])
-    for i, k in enumerate(n_l):
-        ang_basis[i] = legfuns.eval_legendre(k, np.cos(th))
-    polar_basis = np.empty([n_funs * n_l.shape[0], rad +1, rad + 1])
-
+    ang_basis = np.zeros([n_l.shape[0], diam, diam])
+    ang_basis = legfuns.eval_legendre(n_l, np.cos(th))
+    return  ang_basis
 
 
 
@@ -122,6 +124,33 @@ def propag(N, n, lmb, h):
     gam = (2 * (N - n - 1) / (lmb1)) * (1 - frac ** (lmb1))
     GAM = -1 * h * gam
     return np.diag(ph), GAM[:,None]
+
+def prop_vec(N, lam, h):
+    n = np.arange(N +1)
+    num = N - n
+    den = N - n - 1
+    frac = num / den.astype(np.float_)
+    lam = lam[:, None]
+    phi = frac ** lam
+    lam1 = lam + 1
+    gam = (2 * den / lam1) * (1 - frac ** lam1)
+    gam = -1 * h[:, None] * gam
+
+    return np.diag(phi), gam[:, None]
+
+def abel_vec(f):
+    f = f[:,::-1]
+    x = np.zeros([lam.shape[0], f.shape[0]])
+    g = np.zeros(f.shape)
+    N = np.float(f.shape[1])
+    Phi, Gam = prop_vec(N, lam, h)
+
+    for i in np.arange(N):
+        g[:, i] = np.dot(C, x)
+        x =  np.dot(Phi[i], x) + Gam[i] * f[:,i]
+    g[:,0] = 2 * g[:,-1] - g[:,-2]
+
+    return np.roll(g[:,::-1],1, axis=1 )
 
 ### 2014-09-18 Normalisation confirmed
 C = np.ones(9) * (np.pi)
@@ -176,7 +205,7 @@ else:
     np.save(store_path + '/bs' + ext, bs.reshape(bs.shape[0],-1).T)
     np.save(store_path + '/rf' + ext, r_funs.T)
 
-    ab = np.empty((bs.shape[0], bs.shape[1] * bs.shape[2]))
+    ab = np.zeros((bs.shape[0], bs.shape[1] * bs.shape[2]))
 
     for i, img in enumerate(bs):
         print 'Transforming img', i
