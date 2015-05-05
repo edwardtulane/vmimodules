@@ -12,15 +12,18 @@ stops at entry N-1, entry N is guessed by differencing
 radii; also, the radial functions are now dumped as r_funs
 -- Added a numerical implementation for discrete data via spline interpolation;
 it works, but is rather messy and extremely slow
+
+2015-05-05: Vectorised Abel transformation and basis set generation.
+-- Added interpolation to increase the fidelity of the state variable transform.
+For large basis sets the vectorised trans. may easily run out of the memory.
+-- Removed unnecessary dependencies.
 """
 
 import sys, os
 sys.path.insert(0, os.path.realpath(os.path.pardir))
 
 import numpy as np
-import pylab as pl
 import scipy.special as legfuns
-import scipy.fftpack as ft
 
 from scipy import integrate
 import scipy.interpolate as intpol
@@ -30,7 +33,8 @@ import scipy.interpolate as intpol
 def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
     """Generate a basis set of radial Gaussians and Legendre pols.
     sig determines the step width, l the number of polynomials;
-    Returns the upper right corner with even ls
+    Returns the upper right corner with even ls.
+    'blowup' multiplies the grid in the x-direction.
     TODO implement odd ls properly"""
 
     # evaluate radial basis set
@@ -40,24 +44,18 @@ def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
     ZZ = np.linspace(-1 * rad, rad, (2 * rad) + 1) 
     diam, zdim = XY.shape[0], ZZ.shape[0]
     R = np.sqrt(XY ** 2 + ZZ[:, None] ** 2)[rad:, (rad * blowup):]
-#    R2 = R ** 2
     r_basis = np.zeros([n_funs, rad + 1, (rad * blowup) + 1])
     r_funs = np.zeros([n_funs, (rad * blowup)  + 1])
+
     Rn = np.arange(n_funs + 1)
     Rn *= sig
     Rn = Rn[:, None, None]
+
     r_basis = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
     r_basis += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
     r_funs = r_basis[:, 0, :]
-#   for n in np.arange(n_funs):
-#       Rn = n * sig
-#       r_basis[n] = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
-#       if Rn:
-#           r_basis[n] += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
-#       r_funs[n] = r_basis[n, 0, :]
 
     # evaluate angular basis set
-
     th = np.arctan2(XY, ZZ[:,None])[rad:, (rad * blowup):]
     n_lev = np.arange(lev + 1)
     n_lodd = np.arange(lodd + 1)
@@ -72,55 +70,16 @@ def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
     else:
         ang_basis = np.zeros([n_l.shape[0], rad +1, (rad * blowup)+ 1])
         ang_basis = legfuns.eval_legendre(n_l, np.cos(th))
-#       for i, k in enumerate(n_l):
-#           ang_basis[i] = legfuns.eval_legendre(k, np.cos(th))
-#       polar_basis = np.zeros([n_funs * n_l.shape[0], rad +1, rad + 1])
 
     # multiply them
     r_basis.shape = (1, n_funs + 1, rad + 1, (rad * blowup) + 1)
     ang_basis.shape = (n_l.shape[0], 1, rad + 1, (rad * blowup) + 1)
-#   for i, r_im in enumerate(r_basis):
-#       for j, th_im in enumerate(ang_basis):
-#           polar_basis[i + j * n_funs] = r_im * th_im
+
     r_funs[0] /= 2
     polar_basis = r_basis * ang_basis
     polar_basis /=2
+
     return polar_basis, r_funs
-
-### 2015-05-04: reworking things a bit with an interpolated basis set
-### later that night: this is useless
-
-def gen_rad_bas(rad, sig, blowup=1):
-    n_funs = np.int(rad / sig)
-    sig_sq = sig ** 2
-    XY = np.linspace(0, rad, (rad * blowup) + 1)
-    diam = XY.shape[0]
-    R = np.sqrt(XY ** 2 + XY[:, None] ** 2)#[rad:, rad:]
-    r_basis = np.zeros([n_funs, diam, diam])
-    r_funs = np.zeros([n_funs, diam])
-    Rn = np.arange(n_funs + 1)
-    Rn *= sig
-    Rn = Rn[:, None, None]
-    r_basis = np.exp(-1 * ((R - Rn) ** 2) / sig_sq) #/ R2
-    r_basis += np.exp(-1 * ((R + Rn) ** 2) / sig_sq)
-    r_funs = r_basis[:, 0, :]
-    return r_basis, r_funs
-
-def gen_ang_bas(rad, lev, lodd=0, blowup=1):
-    XY = np.linspace(0, rad, (rad * blowup) + 1)
-    diam = XY.shape[0]
-    th = np.arctan2(XY, XY[:,None])#[rad:,rad:]
-    n_lev = np.arange(lev + 1)
-    n_lodd = np.arange(lodd + 1)
-
-    n_l = np.hstack((n_lev[0::2], n_lodd[1::2]))
-    n_l = n_l[:, None, None]
-
-    ang_basis = np.zeros([n_l.shape[0], diam, diam])
-    ang_basis = legfuns.eval_legendre(n_l, np.cos(th))
-    return  ang_basis
-
-
 
 ### state-variable Abel transform
 
@@ -140,6 +99,7 @@ def propag(N, n, lmb, h):
     return np.diag(ph), GAM[:,None]
 
 def prop_vec(N, lam, h):
+    """Vector form of propag()"""
     n = np.arange(N +1)
     num = N - n
     den = N - n - 1
@@ -147,27 +107,13 @@ def prop_vec(N, lam, h):
     lam = lam[:, None]
     phi = frac ** lam
     phi_diag = np.zeros((lam.shape[0] * lam.shape[0], N + 1))
-    phi_diag[::lam.shape[0] + 1, :] = phi
+    phi_diag[::lam.shape[0] + 1,:] = phi
     phi_diag.shape = (lam.shape[0], lam.shape[0], N + 1)
     lam1 = lam + 1
     gam = (2 * den / lam1) * (1 - frac ** lam1)
     gam = -1 * h[:, None] * gam
 
     return phi_diag, gam[:, None]
-
-def abel_vec(f):
-    f = f[:,::-1]
-    x = np.zeros([lam.shape[0], f.shape[0]])
-    g = np.zeros(f.shape)
-    N = np.float(f.shape[1])
-    Phi, Gam = prop_vec(N, lam, h)
-
-    for i in np.arange(N):
-        g[:, i] = np.dot(C, x)
-        x =  np.dot(Phi[:,:,i], x) + Gam[:,:,i] * f[:,i]
-    g[:,0] = 2 * g[:,-1] - g[:,-2]
-
-    return np.roll(g[:,::-1],1, axis=1 )
 
 ### 2014-09-18 Normalisation confirmed
 C = np.ones(9) * (np.pi)
@@ -180,14 +126,31 @@ def AbelTrans(f):
     x = np.zeros([lam.shape[0], f.shape[0]])
     g = np.zeros(f.shape)
     N = np.float(f.shape[1])
+    Phi, Gam = prop_vec(N, lam, h)
 
     for i in np.arange(N):
         g[:,i] = np.dot(C, x)
-        Phi, Gam = propag(N, i, lam, h)
-        x =  np.dot(Phi, x) + Gam * f[:,i]
+#       Phi, Gam = propag(N, i, lam, h)
+        x =  np.dot(Phi[:,:,i], x) + Gam[:,:,i] * f[:,i]
     g[:,0] = 2 * g[:,-1] - g[:,-2]
 
     return np.roll(g[:,::-1],1, axis=1 )
+
+def AbelVec(f):
+    """Vectorised Abel Transform"""
+    f = f[:,:,::-1]
+    x = np.zeros([f.shape[0], lam.shape[0], f.shape[1]])
+    g = np.zeros(f.shape)
+    N = np.float(f.shape[2])
+    Phi, Gam = prop_vec(N, lam, h)
+
+    for i in np.arange(N):
+        g[:,:,i] = np.dot(C, x)
+        x =  np.swapaxes(np.dot(Phi[:,:,i], x), 0, 1) + Gam[None,:,:,i] * f[:,None,:,i]
+        print 'Transforming point ', i
+    g[:,:,0] = 2 * g[:,:,-1] - g[:,:,-2]
+
+    return np.roll(g[:,:,::-1],1, axis=2 )
 
 def AbelInt(f):
     """Does the Abel integral numerically and linewise. n.b.: super slow!"""
@@ -206,12 +169,14 @@ def AbelInt(f):
 
 
 if __name__ == '__main__':
-    r_max = 150
-    sigma = 2.00
-    n_even = 8
+#    pass
+#else:
+    r_max = 250
+    sigma = 1.00
+    n_even = 32
     n_odd = 0
 
-    blowup = 4
+    blowup = 8
 
     condition = 1E-7
 
@@ -223,14 +188,14 @@ if __name__ == '__main__':
     np.save(store_path + '/bs' + ext, bs[:,:,::blowup].reshape(bs.shape[0],-1).T)
     np.save(store_path + '/rf' + ext, r_funs[:, ::blowup].T)
 
-    ab = np.zeros((bs.shape[0], bs.shape[1], bs.shape[2]))
-
+    ab = np.zeros((bs.shape[0], bs.shape[1], bs.shape[1]))
+#   ab = AbelVec(bs)
     for i, img in enumerate(bs):
         print 'Transforming img: ', i
-        ab[i] = abel_vec(img)
+        ab[i] = AbelTrans(img)[:,::blowup] /np.float(blowup)
 
     del bs, r_funs
-    ab = ab[:,:,::blowup]
+#   ab = ab[:,:,::blowup] / np.float(blowup)
     ab = ab.reshape(ab.shape[0], -1)
     np.save(store_path + '/ab' + ext, ab)
     FtF = np.dot(ab, ab.T)
