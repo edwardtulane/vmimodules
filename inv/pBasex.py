@@ -76,10 +76,12 @@ def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
     ang_basis.shape = (n_l.shape[0], 1, rad + 1, (rad * blowup) + 1)
 
     r_funs[0] /= 2
-    polar_basis = r_basis * ang_basis
-    polar_basis /=2
+#   r_basis[0,0] /= 2
+#   polar_basis = r_basis * ang_basis
+#   polar_basis /=2
 
-    return polar_basis, r_funs
+    return r_basis, ang_basis, r_funs 
+#   return polar_basis, r_funs
 
 ### state-variable Abel transform
 
@@ -128,7 +130,7 @@ def AbelTrans(f):
     N = np.float(f.shape[1])
     Phi, Gam = prop_vec(N, lam, h)
 
-    for i in np.arange(N):
+    for i in xrange(N):
         g[:,i] = np.dot(C, x)
 #       Phi, Gam = propag(N, i, lam, h)
         x =  np.dot(Phi[:,:,i], x) + Gam[:,:,i] * f[:,i]
@@ -144,10 +146,10 @@ def AbelVec(f):
     N = np.float(f.shape[2])
     Phi, Gam = prop_vec(N, lam, h)
 
-    for i in np.arange(N):
+    for i in xrange(N):
         g[:,:,i] = np.dot(C, x)
         x =  np.swapaxes(np.dot(Phi[:,:,i], x), 0, 1) + Gam[None,:,:,i] * f[:,None,:,i]
-        print 'Transforming point ', i
+        print '.',
     g[:,:,0] = 2 * g[:,:,-1] - g[:,:,-2]
 
     return np.roll(g[:,:,::-1],1, axis=2 )
@@ -171,37 +173,32 @@ def AbelInt(f):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 250
+    r_max = 350
     sigma = 1.00
     n_even = 32
     n_odd = 0
 
     blowup = 8
 
-    condition = 1E-7
-
     store_path = os.path.join(sys.path[0], 'storage')
     ext = '-' + str(r_max)+'-'+str(n_even)
 
-    bs, r_funs = gen_bas(r_max, sigma, n_even, n_odd, blowup, cos2=False)
-    bs.shape = (-1, r_max + 1, (r_max * blowup) +1)
-    np.save(store_path + '/bs' + ext, bs[:,:,::blowup].reshape(bs.shape[0],-1).T)
+    r_bas, ang_bas, r_funs = gen_bas(r_max, sigma, n_even, n_odd, blowup, cos2=False)
+    bs = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], r_bas.shape[2]))
+    ab = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], r_bas.shape[2]))
+    for l in xrange(ang_bas.shape[0]):
+        tmp_bs = r_bas * ang_bas[l]
+        tmp_bs = np.reshape(tmp_bs, (-1, r_bas.shape[2], r_bas.shape[3]))
+        bs[l] = tmp_bs[:,:,::blowup]
+        ab[l] = AbelVec(tmp_bs)[:,:,::blowup] / np.float(blowup)
+        print '\n Transformed l = %d' % (2*l)
+
+    np.save(store_path + '/bs' + ext, bs.reshape(bs.shape[0] * bs.shape[1], bs.shape[2] ** 2).T)
     np.save(store_path + '/rf' + ext, r_funs[:, ::blowup].T)
+    del bs, r_funs, r_bas, ang_bas
 
-    ab = np.zeros((bs.shape[0], bs.shape[1], bs.shape[1]))
-#   ab = AbelVec(bs)
-    for i, img in enumerate(bs):
-        print 'Transforming img: ', i
-        ab[i] = AbelTrans(img)[:,::blowup] /np.float(blowup)
-
-    del bs, r_funs
-#   ab = ab[:,:,::blowup] / np.float(blowup)
-    ab = ab.reshape(ab.shape[0], -1)
+    ab = ab.reshape(ab.shape[0] * ab.shape[1], ab.shape[2] ** 2)
     np.save(store_path + '/ab' + ext, ab)
     FtF = np.dot(ab, ab.T)
     np.save(store_path + '/FtF' + ext, FtF)
-    del FtF
-#   inv = sp.linalg.pinv2(ab, rcond=condition)
-#   np.save('./storage/inv' + ext + '-E7', inv)
-
 

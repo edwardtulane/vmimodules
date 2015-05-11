@@ -13,14 +13,10 @@ TODO:
 """
 
 import sys, os, warnings
-mod_home = os.path.realpath(os.path.curdir)
-stor_dir = os.path.join(mod_home, 'storage')
-sys.path.insert(0, mod_home)
 
 import numpy as np
 import scipy as sp
-
-import pylab as pl
+import pandas as pd
 
 import scipy.fftpack as fft
 import scipy.ndimage as ndimg
@@ -34,9 +30,15 @@ import proc as vmp
 import inv as vminv
 #import matplotlib.gridspec as gridspec
 #from matplotlib.widgets import Slider, Button, RadioButtons
-import vmimodules.conf
-global_dens = vmimodules.conf.global_dens
 
+import vmimodules.conf
+mod_home = vmimodules.conf.mod_home
+stor_dir = os.path.join(mod_home, 'storage')
+
+if 'GLOBAL_DENS' in os.environ:
+    global_dens = int(os.environ['GLOBAL_DENS'])
+else:
+    global_dens = vmimodules.conf.global_dens
 
 class RawImage(np.ndarray):
     """
@@ -44,6 +46,9 @@ class RawImage(np.ndarray):
     Contains methods for orienting and interpolating a single frame,
     also operator overloading for manipulations between images
     Inversion methods are called from an Inversion class object (TODO)
+
+    Methods:
+    -- cropsquare: cuts out a square and may be supplied with the rotation angle
     """
 
     def __new__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[]):
@@ -55,7 +60,6 @@ class RawImage(np.ndarray):
 
         self.cx, self.cy = xcntr, ycntr
         self.rad_sq = radius
-        self.clrmap = pl.cm.gnuplot2
 
         if hotspots:
             raw = vmp.hot_spots(raw, hotspots)
@@ -85,8 +89,16 @@ class RawImage(np.ndarray):
 
 class Frame(np.ndarray):
     """
-    Docstring
+    Manipulation of square images incl. interpolation and rotation
+    Methods:
+    -- interpol
+    -- evalrect
+    -- evalpolar
+    -- centre_pbsx
+    (-- raddist)
+    (-- find_centre)
     """
+
     def __new__(self, frame, offs=0):
 
         self.cy, self.cx = (np.asarray(frame.shape) - 1) / 2
@@ -97,7 +109,6 @@ class Frame(np.ndarray):
         self.diam = size[0]
         self.offset = offs
         self.disp = [0.0, 0.0, 0.0]
-        self.clrmap = pl.cm.gnuplot2
 
 #       if do_intpol:
 #           self.interpol(self)
@@ -212,21 +223,25 @@ class Frame(np.ndarray):
         self.__rotateframe(self.offset + self.disp[0])
         self.evalrect(global_dens)
 
+#===============================================================================
+
 class RectImg(Frame):
     """
-    Docstring
+    Processed image after interpolation and recasting.
+    Methods:
+    -- TODO: return (weighted) quadrant(s)
+    -- find_bg_factor: early stage of bg subtraction improvement
     """
     def __new__(self, frame):
 
-        self.cy, self.cx = (np.asarray(frame.shape) - 1) / 2
-        size = frame.shape
+        size = frame.shape[-2:]
+        self.cy, self.cx = (np.asarray(size) - 1) / 2
         dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
                         size[0] - self.cy - 1])
         self.rad_sq = np.min([dx, dy])
         self.diam = size[0]
-        self.clrmap = pl.cm.gnuplot2
 
-        return np.ndarray.__new__(self, shape=size, dtype=np.float_,
+        return np.ndarray.__new__(self, shape=frame.shape, dtype=np.float_,
                                   buffer=frame.copy().data, order='C')
 
     def __eval_bg_fac(self, fac, bg, inv):
@@ -257,14 +272,13 @@ class RectImg(Frame):
 
 class PolarImg(np.ndarray):
     """
-    Docstring
+    This is still a dummy for manipulations in polar coords.
     """
     def __new__(self, frame):
 
         size = frame.shape
         self.cy, self.cx = (0, 0)
         drad, dphi = frame.shape
-        self.clrmap = pl.cm.gnuplot2
 
         return np.ndarray.__new__(self, shape=size, dtype=np.float_,
                                   buffer=frame.copy().data, order='C')
@@ -272,6 +286,49 @@ class PolarImg(np.ndarray):
 #==============================================================================
 #==============================================================================
 
+header_keys = ['date', 'background', 'seqNo', 'path', 'index']
+time_keys = ['t_start', 't_end', 'delta_t']
+meta_keys = ['Rep', 'Ext', 'MCP', 'Phos', 
+                    'probe wavelength', 'pump wavelength', 
+                    'molecule', 'acqNo', 'background']
+
+frame_keys = ['center x', 'center y', 'offset angle', 'rmax',
+              'mesh density', 'disp alpha', 'disp x', 'disp y']
+
+center_keys = ['centering method', 'opt disp alpha', 'opt disp x', 'opt disp y', 'fun(min)']
+
+inv_keys = ['inversion method', 'l max', 'odd l', 'sigma', 'total basis set size', 'RSS']
+
+class ParseExperiment(object):
+
+    def __init__(self, date, seqNo=None, inx=None, setup='tw', 
+                 meta_dict={}, frame_dict={}, skip_read=False):
+
+        self.date = pd.Timestamp(date)
+        self.seqNo, self.inx = seqNo, inx
+        
+        self.path = os.path.join(vmi_path, setup, date)
+        self.hdf = os.path.join(vmi_dir, 'procd', setup, date)
+
+
+        
+        if self.seqNo is None:
+            self.hdf = os.path.join(self.hdf, '-'.join('raw', str(inx[0]))
+            if self.inx is None:
+                raise Exception("Hand over indices if the measurement is not a sequence")
+
+        else:
+            seqdir = '-'.join(date, seqNo)
+            if setup == 'sf':
+                seqdir = os.path.join('Seq', seqdir)
+            self.path = os.path.join(self.path, seqdir)
+            self.hdf = os.path.join(self.hdf, '-'.join('seq', str(seqNo))
+
+
+def getint(name):
+        basename = name.partition('.')[0]
+        num = basename.split('-')[-1]
+        return int(num)
 
 
 if __name__ == '__main__':

@@ -6,26 +6,27 @@ Created on Wed Sep 24 20:19:00 2014
 """
 
 import sys, os
-mod_home = os.path.realpath(os.path.curdir)
-mod_home=os.path.expanduser('~/program/vmimodules')
-stor_dir = os.path.join(mod_home, 'storage')
-sys.path.insert(0, mod_home)
 
 import numpy as np
 import scipy.special as spc
 import scipy.integrate as integ
 import proc as vmp
 
+import vmimodules.conf
+mod_home = vmimodules.conf.mod_home
+stor_dir = os.path.join(mod_home, 'storage')
 
 class Inverter(object):
     """
     Docstring
     """
     def __init__(self, r_max=250, n_even=50, dir=stor_dir, dryrun=0):
-        self.__ext = '-' + str(r_max)+'-'+str(n_even)
+        self.__ext = '-'.join(('',  str(r_max), str(n_even))) #'-' + str(r_max)+'-'+str(n_even)
         if not dryrun:
             self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
             self.FtF = np.load(stor_dir + '/FtF' + self.__ext + '.npy')
+#           self.pinv = vmp.setupPolBasex(self.ab, self.FtF, reg=1)
+#           del self.ab, self.FtF
             self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
             self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
                     self.__M2.T, self.__M2),
@@ -34,7 +35,7 @@ class Inverter(object):
         self.lvals = (n_even / 2) + 1
         self.n_funs = self.bs.shape[1] / self.lvals
         self.dim = r_max + 1
-        self.beta_vec = self.gen_beta_vec(self.lvals)
+#       self.beta_vec = self.gen_beta_vec(self.lvals)
         self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
 
@@ -74,15 +75,38 @@ class Inverter(object):
         arr.F2_arg = jn / (2 * np.pi * R1)
         arr.orig = np.dot(arr.FHT, arr.__Cmn)
 
+    def invertMaxEnt(self, arr):
+        arr_path = os.path.join(mod_home, 'inv')
+        os.chdir(arr_path)
+        np.savetxt('tmp_arr' , arr)
+
+        os.system('./MEVIR.elf < tmp_arr')
+        os.system('sed -e "s/D/e/g" -i MXLeg.dat')
+
+        return (np.loadtxt('MXLeg.dat'), 
+                np.loadtxt('MXmap.dat', delimiter=','), 
+                np.loadtxt('MXres.dat', delimiter=',')
+                )
+
     def invertBasex(self, arr):
         bsx = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
                             self.__MTM1, self.__MTM2)
         return bsx
 
-    def invertPolBasex(self, arr):
+    def invertPolBasex(self, arr, reg=1, get_pbsx=False):
             arr = arr.ravel()
-            pbsx = np.dot(np.linalg.inv(self.FtF + 1 * np.eye(self.FtF.shape[0])), np.dot(self.ab, arr))
-            return pbsx
+            pbsx = np.dot(np.linalg.inv(self.FtF + reg * np.eye(self.FtF.shape[0])), 
+                   np.dot(self.ab, arr))
+            if get_pbsx:
+                return pbsx
+
+            leg = self.pbsx2rad(pbsx)
+            leg *= np.arange(self.dim)
+            pbsx = pbsx.ravel()
+            inv_map = self.pbsx2fold(pbsx)
+            res = arr - self.pbsx2ab(pbsx).ravel()
+            res.shape = (self.dim, self.dim)
+            return leg, inv_map, res**2
 
     def pbsx2fold(self, pbsx):
             fold = np.dot(pbsx, self.bs.T)
@@ -99,10 +123,6 @@ class Inverter(object):
             dist = np.dot(pbsx, self.rf.T)
             return dist
 
-    #    def pbsx2fold(pbsx):
-    #            inv = np.dot(pbsx, bs.T)
-    #        inv.shape = (251,251)
-    #        return inv
     def gen_beta_vec(self, lvals):
         ll = np.arange(lvals) * 2
         th = np.linspace(0, np.pi, 2**20+1)
@@ -116,14 +136,15 @@ class Inverter(object):
     def gen_lfuns(self, lvals):
         ll = np.arange(lvals) * 2
         th = np.linspace(0, np.pi, 2**15+1)
-        lfuns = np.zeros((lvals, 2**15+1))
-        for i, l in enumerate(ll): 
-            lfuns[i] = spc.eval_legendre(l, np.cos(th))
+#       lfuns = np.zeros((lvals, 2**15+1))
+        lfuns = spc.eval_legendre(ll[:, None], np.cos(th))
+#       for i, l in enumerate(ll): 
+#           lfuns[i] = spc.eval_legendre(l, np.cos(th))
         return th, lfuns
 
     def get_beta_map(self, pbsx):
         pbsx.shape = (pbsx.shape[0], self.lvals, -1)
         dists = np.dot(pbsx.swapaxes(1,2), self.lfuns)
-        lo = dists ** 2 # * np.sin(self.th)
+        lo = dists ** 2 * np.sin(self.th)
         up = lo * np.cos(self.th) ** 2
         return integ.romb(up, axis=2) / integ.romb(lo, axis=2)
