@@ -12,7 +12,7 @@ TODO:
 
 """
 
-import sys, os, warnings
+import sys, os, warnings, re, time
 
 import numpy as np
 import scipy as sp
@@ -40,6 +40,8 @@ if 'GLOBAL_DENS' in os.environ:
 else:
     global_dens = vmimodules.conf.global_dens
 
+mm_to_fs = 6671.28190396304
+
 class RawImage(np.ndarray):
     """
     VMI class for reading and manipulating single frames
@@ -48,7 +50,7 @@ class RawImage(np.ndarray):
     Inversion methods are called from an Inversion class object (TODO)
 
     Methods:
-    -- cropsquare: cuts out a square and may be supplied with the rotation angle
+    -- crop_square: cuts out a square and may be supplied with the rotation angle
     """
 
     def __new__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[]):
@@ -81,7 +83,7 @@ class RawImage(np.ndarray):
         return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
                                   buffer=raw.copy(), order='C')
 
-    def cropsquare(self, offset=0):
+    def crop_square(self, offset=0):
         cropd = vmp.centre_crop(self, self.cx, self.cy, self.rad_sq)
         return Frame(cropd, offset)
 
@@ -92,10 +94,10 @@ class Frame(np.ndarray):
     Manipulation of square images incl. interpolation and rotation
     Methods:
     -- interpol
-    -- evalrect
-    -- evalpolar
+    -- eval_rect
+    -- eval_polar
     -- centre_pbsx
-    (-- raddist)
+    (-- rad_dist)
     (-- find_centre)
     """
 
@@ -130,7 +132,7 @@ class Frame(np.ndarray):
             self.ck = ndimg.rotate(self.__ck, phi,
                                reshape=False, prefilter=False)
 
-    def evalrect(self, density=global_dens, displace=[0., 0.], phi=0):
+    def eval_rect(self, density=global_dens, displace=[0., 0.], phi=0):
         """ Project the image onto a rectangular grid with given spacing """
         self.__rotateframe(self.offset + self.disp[0] +  phi)
         coords = vmp.gen_rect(self.diam, density, self.disp[1:] + displace)
@@ -138,18 +140,18 @@ class Frame(np.ndarray):
                                       output=np.float_)
         return RectImg(rect)
 
-    def evalpolar(self, radN=251, polN=513):
+    def eval_polar(self, radN=251, polN=513):
         """ Project the image onto a polar grid with radial and polar denss."""
         self.__rotateframe(self.offset + self.disp[0])
         coords = vmp.gen_polar(self.rad_sq, radN, polN, self.disp[1:])
         polar = ndipol.map_coordinates(self.ck, coords, prefilter=False)
         return PolarImg(polar)
 
-    def raddist(self):
+    def rad_dist(self):
         X = np.abs(np.arange(self.diam) - self.cx)
         radint = Frame(self * X)
         radint.interpol()
-        polar = radint.evalpolar()
+        polar = radint.eval_polar()
         return sp.integrate.romb(polar, axis=1)
 
 #    def invertedpolar(self, radN, polN, inv='basex'):
@@ -163,20 +165,20 @@ class Frame(np.ndarray):
     def __eval_sym(self, delta):
         """ Returns the total imaginary part of the 2D FFT of self.rect """
         delta[0] = 0.0
-        rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
+        rect_in = self.eval_rect(global_dens, delta[1:], phi=delta[0])
         ft = fft.fft2(rect_in)
         return abs(ft.imag).sum()
 
     def __eval_sym2(self, delta):
         """ Use Bordas' criterion. I found it to be inferior """
         delta[0] = 0.0
-        rect_in = self.evalrect(global_dens, delta[1:], phi=delta[0])
+        rect_in = self.eval_rect(global_dens, delta[1:], phi=delta[0])
 #       rect_in = self.rect.copy()
         Tstar = np.flipud(np.fliplr(rect_in))
         return -1 * np.sum(rect_in * Tstar)
 
     def __eval_sym3(self, delta, inv, dens):
-        rect_in = self.evalrect(501,  delta[1:], phi=delta[0])
+        rect_in = self.eval_rect(501,  delta[1:], phi=delta[0])
         quads = vmp.quadrants(rect_in)
         pb = np.zeros((4, inv.FtF.shape[0]))
         for k, img in enumerate(quads):
@@ -221,7 +223,7 @@ class Frame(np.ndarray):
             self.disp += self.res.x
         # Final evaluation
         self.__rotateframe(self.offset + self.disp[0])
-        self.evalrect(global_dens)
+        self.eval_rect(global_dens)
 
 #===============================================================================
 
@@ -286,9 +288,11 @@ class PolarImg(np.ndarray):
 #==============================================================================
 #==============================================================================
 
-header_keys = ['date', 'background', 'seqNo', 'path', 'index']
-time_keys = ['t_start', 't_end', 'delta_t']
-meta_keys = ['Rep', 'Ext', 'MCP', 'Phos', 
+# all the parameters that come to my mind. may be extended
+header_keys = ['name', 'date', 'mode', 'seqNo', 
+               'path', 'index', 'length', 'access', 'background']
+time_keys = ['t start', 't end', 'delta t']
+meta_keys = ['particle', 'Rep', 'Ext', 'MCP', 'Phos', 
                     'probe wavelength', 'pump wavelength', 
                     'molecule', 'acqNo', 'background']
 
@@ -302,45 +306,166 @@ inv_keys = ['inversion method', 'l max', 'odd l', 'sigma', 'total basis set size
 class ParseExperiment(object):
 
     def __init__(self, date, seqNo=None, inx=None, setup='tw', 
-                 meta_dict={}, frame_dict={}, skip_read=False):
+                 meta_dict={}, frame_dict={}):
+        global header_keys, mm_to_fs
+        vmi_dir = vmimodules.conf.vmi_dir
 
         self.date = pd.Timestamp(date)
+        self.access = pd.Timestamp(time.asctime())
         self.seqNo, self.inx = seqNo, inx
         
-        self.path = os.path.join(vmi_path, setup, date)
+        self.basedir = self.path = os.path.join(vmi_dir, setup, date)
         self.hdf = os.path.join(vmi_dir, 'procd', setup, date)
 
+        if hasattr(frame_dict, 'mesh density'):
+            self.dens = frame_dict['mesh density']
+        else:
+            frame_dict['mesh density'] = global_dens
 
-        
+        self.meta_dict, self.frame_dict = meta_dict, frame_dict
+
         if self.seqNo is None:
-            self.hdf = os.path.join(self.hdf, '-'.join('raw', str(inx[0]))
             if self.inx is None:
                 raise Exception("Hand over indices if the measurement is not a sequence")
+            self.mode = 'raw'
+            self.index = inx[0]
+            self.length = len(inx)
+            self.name = '-'.join((date, 'raw', self.index))
+
+            filelist = os.listdir(self.path)
+            raws = [l for l in filelist if getint(l) in inx]
+            raws.sort(key=getint)
+            assert self.length == len(raws), 'Some rawfiles must be missing'
 
         else:
-            seqdir = '-'.join(date, seqNo)
+            self.mode = 'seq'
+            seqdir = '-'.join((date, str(seqNo)))
             if setup == 'sf':
                 seqdir = os.path.join('Seq', seqdir)
             self.path = os.path.join(self.path, seqdir)
-            self.hdf = os.path.join(self.hdf, '-'.join('seq', str(seqNo))
+            self.name = '-'.join((date, 'seq', str(seqNo)))
+
+            filelist = os.listdir(self.path)
+            regex = re.compile('raw$')
+            raws = [l for l in filelist 
+                    for m in [regex.search(l)] if m]
+            raws.sort(key=getint)
+            self.length = len(raws)
+
+            metafile = os.path.join(self.basedir, '%s-%s.m' % (date, self.seqNo))
+            sffile = os.path.join(self.path, 'StgPositions.npy')
+            if os.path.exists(metafile):
+                self.times = self.get_times(metafile)
+            elif os.path.exists(sffile):
+                self.times = np.load(sffile)
+                self.times *= mm_to_fs
+            else:
+                self.times = np.linspace(time_dict['t start'],
+                                         time_dict['t end'], time_dict['delta t'])
+
+        self.hdf = os.path.join(self.hdf, self.name)
+        hdf_dir = os.path.dirname(self.hdf)
+        if not os.path.exists(hdf_dir):
+            os.mkdir(hdf_dir)
+        self.inx = raws
+
+    def read_data(self):
+
+        if not self.frame_dict.has_key('hot_spots'):
+            self.frame_dict['hot_spots'] = []
+        if not self.frame_dict.has_key('rmax'):
+            self.frame_dict['rmax'] = 0
+        if not self.frame_dict.has_key('offset angle'):
+            self.frame_dict['offset angle'] = 0
+
+        img, frames = {}, {}
+        d = self.frame_dict
+        for i in xrange(self.length):
+            f = os.path.join(self.path, self.inx[i])
+            img[i] = RawImage(f, d['center x'], d['center y'],
+                              d['rmax'], d['hot_spots'])
+            frames[i] = img[i].crop_square(d['offset angle'])
+
+        self.raw_data = np.asarray(img.values())
+        self.frames = np.asarray(frames.values())
+
+    def get_header(self):
+        
+        header = {}
+        for k in header_keys:
+            if hasattr(self, k):
+                header[k] = getattr(self, k)
+            else:
+                header[k] = None
+        header.update(self.meta_dict)
+        header.update(self.frame_dict)
+
+        return pd.Series(header)
+
+    def get_times(self, path):
+
+        from StringIO import StringIO
+
+        for line in open(path):
+            if line.startswith('MBES_DELAY'):
+                    line = line.split('[')[-1]
+                    line = line.split(']')[0]
+                    time_string = line
+        s = StringIO(time_string)
+        return np.loadtxt(s)
+
+    def get_props(self):
+
+        self.ints = self.frames.astype(np.float_).sum((-1, -2))
+        dists = self.frames - self.frames.astype(np.float_).mean(0)
+        self.diff = dists.sum((-1, -2))
+        self.dist = (dists ** 2).sum((-1, -2))
+
+        props = {'intensity': pd.Series(self.ints),
+                 'difference':pd.Series(self.diff),
+                 'distance' :pd.Series(self.dist)
+                }
+
+        return pd.DataFrame(props)
+
+    def store(self):
+
+        with pd.HDFStore('%s.h5' % self.hdf) as store:
+            header = self.get_header()
+            props = self.get_props()
+
+            store['header'] = header
+            store['props'] = props
+            store['raw'] = pd.Panel(self.raw_data)
+            store['frames'] = pd.Panel(self.frames)
+            if hasattr(self, 'times'):
+                store['times'] = pd.Series(self.times)
+
+    def retrieve(self, key):
+
+        with pd.HDFStore('%s.h5' % self.hdf) as store:
+            return store['%s' % key]
+
+
 
 
 def getint(name):
         basename = name.partition('.')[0]
         num = basename.split('-')[-1]
+        num = num.split('q')[-1]
         return int(num)
 
 
 if __name__ == '__main__':
     from vis import *
     t = RawImage(mod_home + '/ati-calibration.raw', xcntr=512, ycntr=465, radius=250)
-    f = t.cropsquare()
+    f = t.crop_square()
     f.interpol()
-    r = f.evalrect()
+    r = f.eval_rect()
 #   bsx = r.pBasex()
 #   fold = vminv.pbsx2fold(bsx)
 #   inv = vmp.unfold(fold, 1,1)
 #   logplot(inv)
 #    a = r.view(Frame)
 #    a.interpol()
-#    a.evalpolar()
+#    a.eval_polar()
