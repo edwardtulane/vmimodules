@@ -20,7 +20,7 @@ class Inverter(object):
     """
     Docstring
     """
-    def __init__(self, r_max=250, n_even=50, dir=stor_dir, dryrun=0):
+    def __init__(self, r_max=250, n_even=16, dir=stor_dir, dryrun=0):
         self.__ext = '-'.join(('',  str(r_max), str(n_even))) #'-' + str(r_max)+'-'+str(n_even)
         if not dryrun:
             self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
@@ -38,6 +38,13 @@ class Inverter(object):
 #       self.beta_vec = self.gen_beta_vec(self.lvals)
         self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        pass
+
+#==============================================================================
 
     def invertFourierHankel(self, arr):
         dim = (arr.shape[1] - 1) /2
@@ -75,6 +82,8 @@ class Inverter(object):
         arr.F2_arg = jn / (2 * np.pi * R1)
         arr.orig = np.dot(arr.FHT, arr.__Cmn)
 
+#==============================================================================
+
     def invertMaxEnt(self, arr):
         arr_path = os.path.join(mod_home, 'inv')
         os.chdir(arr_path)
@@ -107,6 +116,8 @@ class Inverter(object):
             res = arr - self.pbsx2ab(pbsx).ravel()
             res.shape = (self.dim, self.dim)
             return leg, inv_map, res**2
+
+#==============================================================================
 
     def pbsx2fold(self, pbsx):
             fold = np.dot(pbsx, self.bs.T)

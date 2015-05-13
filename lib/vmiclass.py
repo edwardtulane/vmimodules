@@ -17,6 +17,7 @@ import sys, os, warnings, re, time
 import numpy as np
 import scipy as sp
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import scipy.fftpack as fft
 import scipy.ndimage as ndimg
@@ -28,6 +29,7 @@ import scipy.signal as sig
 #
 import proc as vmp
 import inv as vminv
+from vis import Plotter
 #import matplotlib.gridspec as gridspec
 #from matplotlib.widgets import Slider, Button, RadioButtons
 
@@ -92,11 +94,13 @@ class RawImage(np.ndarray):
 class Frame(np.ndarray):
     """
     Manipulation of square images incl. interpolation and rotation
+    Arguments: frame array, offset angle
     Methods:
-    -- interpol
-    -- eval_rect
-    -- eval_polar
-    -- centre_pbsx
+    -- interpol(sm)
+    -- eval_rect(dens, disp, phi)
+    -- eval_polar(radN, polN)
+    -- centre_pbsx(cntr, ang, dens)
+    deprecated:
     (-- rad_dist)
     (-- find_centre)
     """
@@ -147,11 +151,8 @@ class Frame(np.ndarray):
         polar = ndipol.map_coordinates(self.ck, coords, prefilter=False)
         return PolarImg(polar)
 
-    def rad_dist(self):
-        X = np.abs(np.arange(self.diam) - self.cx)
-        radint = Frame(self * X)
-        radint.interpol()
-        polar = radint.eval_polar()
+    def rad_dist(self, radN, th):
+        polar = radint.eval_polar(radN) * th
         return sp.integrate.romb(polar, axis=1)
 
 #    def invertedpolar(self, radN, polN, inv='basex'):
@@ -190,7 +191,8 @@ class Frame(np.ndarray):
     def centre_pbsx(self, cntr=True, ang=False, dens=501):
         """ Brute Force centering with the pBasex method """
         init_vec = [0, 0, 0]
-        inv = vminv.Inverter(250, 8)
+        rad = (dens - 1) / 2
+        inv = vminv.Inverter(rad, 8)
         domain = np.tile([-15, 15], 3).reshape(3, 2)
         if not cntr:
             domain[1:] = 0.0
@@ -289,12 +291,12 @@ class PolarImg(np.ndarray):
 #==============================================================================
 
 # all the parameters that come to my mind. may be extended
-header_keys = ['name', 'date', 'mode', 'seqNo', 
-               'path', 'index', 'length', 'access', 'background']
+header_keys = ['name', 'date', 'status', 'mode', 'seqNo', 
+               'index', 'path', 'length', 'access', 'background']
 time_keys = ['t start', 't end', 'delta t']
 meta_keys = ['particle', 'Rep', 'Ext', 'MCP', 'Phos', 
                     'probe wavelength', 'pump wavelength', 
-                    'molecule', 'acqNo', 'background']
+                    'molecule', 'fragment', 'charge', 'acqNo', 'background']
 
 frame_keys = ['center x', 'center y', 'offset angle', 'rmax',
               'mesh density', 'disp alpha', 'disp x', 'disp y']
@@ -303,11 +305,41 @@ center_keys = ['centering method', 'opt disp alpha', 'opt disp x', 'opt disp y',
 
 inv_keys = ['inversion method', 'l max', 'odd l', 'sigma', 'total basis set size', 'RSS']
 
-class ParseExperiment(object):
+
+#==============================================================================
+
+class CommonMethods(object):
+    """ """
+    def retrieve(self, key):
+
+        with pd.HDFStore('%s.h5' % self.hdf) as store:
+            return store['%s' % key]
+
+    def __push_fig(self, img, tag='frame', mode='lin'):
+        """ """
+        if tag == 'map':
+            img = img.
+        if mode == 'lin':
+            self.pl.vmiplot(img)
+        elif mode == 'log':
+            self.pl.logplot(img)
+
+        plt.savefig('%s-%s-%s.svg' % (self.hdf, tag, mode)
+        plt.close()
+
+    def __push_plot(self, obj, tag):
+
+        obj.plot(subplots=True)
+        plt.savefig('%s-%s.svg' % (self.hdf, tag)
+        plt.close()
+
+#==============================================================================
+
+class ParseExperiment(CommonMethods):
 
     def __init__(self, date, seqNo=None, inx=None, setup='tw', 
                  meta_dict={}, frame_dict={}):
-        global header_keys, mm_to_fs
+        global header_keys, meta_keys, frame_keys, time_keys, mm_to_fs
         vmi_dir = vmimodules.conf.vmi_dir
 
         self.date = pd.Timestamp(date)
@@ -316,6 +348,7 @@ class ParseExperiment(object):
         
         self.basedir = self.path = os.path.join(vmi_dir, setup, date)
         self.hdf = os.path.join(vmi_dir, 'procd', setup, date)
+        self.cols = header_keys + meta_keys + frame_keys
 
         if hasattr(frame_dict, 'mesh density'):
             self.dens = frame_dict['mesh density']
@@ -353,7 +386,7 @@ class ParseExperiment(object):
             self.length = len(raws)
 
             metafile = os.path.join(self.basedir, '%s-%s.m' % (date, self.seqNo))
-            sffile = os.path.join(self.path, 'StgPositions.npy')
+            sffile = os.path.join(self.path, 'TgtPositions.npy')
             if os.path.exists(metafile):
                 self.times = self.get_times(metafile)
             elif os.path.exists(sffile):
@@ -362,9 +395,10 @@ class ParseExperiment(object):
             else:
                 self.times = np.linspace(time_dict['t start'],
                                          time_dict['t end'], time_dict['delta t'])
+            self.cols += time_keys
 
+        hdf_dir = self.hdf
         self.hdf = os.path.join(self.hdf, self.name)
-        hdf_dir = os.path.dirname(self.hdf)
         if not os.path.exists(hdf_dir):
             os.mkdir(hdf_dir)
         self.inx = raws
@@ -434,17 +468,164 @@ class ParseExperiment(object):
             header = self.get_header()
             props = self.get_props()
 
-            store['header'] = header
+            store['header'] = header[self.cols]
             store['props'] = props
-            store['raw'] = pd.Panel(self.raw_data)
-            store['frames'] = pd.Panel(self.frames)
+
+            raws = pd.Panel(self.raw_data)
+            frames = pd.Panel(self.frames)
+
             if hasattr(self, 'times'):
-                store['times'] = pd.Series(self.times)
+                raws.items = self.times
+                frames.items = self.times
 
-    def retrieve(self, key):
+            store['raws'] = raws
+            store['frames'] = frames
 
+            self.__push_fig(self.frames.sum(0), mode='lin')
+            self.__push_fig(self.frames.sum(0), mode='log')
+            self.__push_plot(props['intensities'], tag='ints')
+            self.__push_plot(props['distance'], tag='dists')
+
+
+
+#==============================================================================
+
+class ProcessExperiment(CommonMethods):
+    """ """
+    def __init__(self, date, seqNo=None, index=None, setup='tw',
+                 cpi = [0, 0, 0],
+                 center_dict={}, inv_dict={}):
+
+        global header_keys, meta_keys, frame_keys
+        global center_keys, inv_keys
+        vmi_dir = vmimodules.conf.vmi_dir
+
+        self.center_dict, self.inv_dict = center_dict, inv_dict
+
+        self.access, self.cpi = pd.Timestamp(time.asctime()), cpi
+        self.seqNo, self.index = seqNo, index
+        self.hdf = os.path.join(vmi_dir, 'procd', setup, date)
+        self.cols = header_keys + meta_keys + frame_keys
+
+
+        if seqNo is None:
+            if inx is None:
+                raise Exception("Hand over first index if the measurement 
+                                 is not a sequence")
+            self.mode = 'raw'
+            self.name = '-'.join((date, 'raw', self.index))
+
+        else:
+            self.mode = 'seq'
+            self.name = '-'.join((date, 'seq', str(seqNo)))
+
+        hdf_dir = self.hdf
+        self.hdf_in = os.path.join(self.hdf, self.name)
+        self.hdf_in = self.__get_ext(self.hdf_in, cpi)
+
+        self.__recover_data()
+
+
+    def __get_ext(self, path, cpi):
+        flags = ['c', 'p', 'i']
+        z = zip(flags, cpi)
+        ext = ['%s%02d' % (f, i) for (f, i) in z if i]
+        ext.insert(0, path)
+        return '-'.join(ext)
+
+    def __propagate_ext(self, ix, overwrite):
+        self.cpi[ix] += 1
+
+        self.hdf = os.path.join(self.hdf_dir, self.name)
+        self.hdf = self.__get_ext(self.hdf, self.cpi)
+
+        if not overwrite:
+            while os.path.exists('%s.h5' % self.hdf):
+                self.cpi[ix] += 1
+                self.hdf = os.path.join(self.hdf_dir, self.name)
+                self.hdf = self.__get_ext(self.hdf, self.cpi)
+
+    def __recover_data(self):
+        with pd.HDFStore('%s.h5' % self.hdf_in) as store:
+            self.header = store['header']
+            self.frames = store['frames']
+            self.times = self.frames.items
+
+    def center(self, cntr=True, ang=False, overwrite=False):
+        h = self.header
+        dens, offs = h['mesh density'], h['offset angle']
+        length = h['length']
+
+        self.opt = np.zeros((length, 4))
+
+        for i in xrange(length):
+            fr = Frame(self.data.values[i], offs)
+            fr.interpol()
+            fr.centre_pbsx(cntr, ang, dens)
+            self.opt[i,0], self.res[i,1:] = fr.res.fun, fr.res.x
+
+        self.header['disp alpha'], self.header[
+                'disp x'], self.header['disp y'] = self.opt.mean(0)[1:]
+        self.__propagate_ext(0, overwrite)
+
+    def process(self, overwrite=False):
+        h = self.header
+        dens, offs = h['mesh density'], h['offset angle']
+        disp = [h['disp alpha'], h['disp x'], h['disp y']]
+        length = h['length']
+
+        self.frames = np.zeros((length, dens, dens))
+        self.intmap = np.zeros((length, dens))
+
+        sinth = np.sin(np.linspace(0, 2 * np.pi, 513))
+        sinth = np.abs(sinth)
+
+        for i in xrange(length):
+            fr = Frame(self.data.values[i], offs)
+            fr.disp = disp
+            fr.interpol()
+            self.frames[i] = fr.eval_rect(dens)
+            self.intmap[i] = fr.rad_dist(dens, sinth)
+
+        self.__propagate_ext(1, overwrite)
+
+    def invert(self):
+
+    def store(self):
         with pd.HDFStore('%s.h5' % self.hdf) as store:
-            return store['%s' % key]
+            prop_1D = ['opt']
+            prop_2D = ['intmap', 'betamap']
+            prop_3D = ['res', 'frames']
+
+            store['header'] = self.header
+
+            frames = pd.Panel(self.frames)
+
+            for k in prop_1D:
+                if hasattr(self, k):
+                    v = pd.DataFrame(self.k)
+                    if self.seqNo: v.index = self.times
+                    store[k] = v
+
+                    self.__push_plot(v, tag=k)
+
+            for k in prop_2D:
+                if hasattr(self, k):
+                    v = pd.DataFrame(self.k)
+                    if self.seqNo: v.index = self.times
+                    store[k] = v
+
+                    self.__push_fig(v.values, mode='lin', tag=k)
+                    self.__push_fig(v.values, mode='log', tag=k)
+
+            for k in prop_3D:
+                if hasattr(self, k):
+                    v = pd.Panel(self.k)
+                    if self.seqNo: v.items = self.times
+                    store[k] = v
+
+                    self.__push_fig(v.values.sum(0), mode='lin', tag=k)
+                    self.__push_fig(v.values.sum(0), mode='log', tag=k)
 
 
 
