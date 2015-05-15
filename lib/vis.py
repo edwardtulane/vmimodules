@@ -28,7 +28,6 @@ class Plotter(object):
         axcolor = 'lightgoldenrodyellow'
         axmin = fig.add_axes([0.25, 0.1, 0.65, 0.03], axisbg=axcolor)
         axmax = fig.add_axes([0.25, 0.15, 0.65, 0.03], axisbg=axcolor)
-≡jedi=0, ≡              (ax, label, valmin, valmax, *valinit=0.5*, valfmt='%1.2f', closedmin=True, closedmax=True, slidermin=None, slidermax=None, dragging=True, **kwargs) ≡jedi≡
         smin = Slider(axmin, 'vmin', vmin, vmax, valinit=vmin)
         smax = Slider(axmax, 'vmax', vmin , vmax, valinit=vmax)
 

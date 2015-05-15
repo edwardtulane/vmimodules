@@ -152,10 +152,12 @@ def Basex(IM,q1,q2, M, Mc, MTM, MTMc):
     zIM[cN-sy:cN+sy+1,cN-sx:cN+sx+1]=np.mat(IM)
     Ci = np.linalg.inv(MTMc+q2*np.eye(NBF,NBF))*Mc.T*zIM*M*np.linalg.inv(MTM+q1*np.eye(NBF,NBF))
     zIMr = np.dot(Mc,np.dot(Ci,Mc.T))
+    ab = np.dot(Mc, Ci).dot(M.T)
+    res = (zIM - ab)[cN-sy:cN+sy+1,cN-sx:cN+sx+1]
     IMr = zIMr[cN-sy:cN+sy+1,cN-sx:cN+sx+1]
     IMr=np.array(IMr)
 
-    return IMr
+    return IMr, np.array(res)
 
 ###
 ###

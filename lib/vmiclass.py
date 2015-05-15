@@ -152,8 +152,11 @@ class Frame(np.ndarray):
         return PolarImg(polar)
 
     def rad_dist(self, radN, th):
-        polar = radint.eval_polar(radN) * th
-        return sp.integrate.romb(polar, axis=1)
+        from numpy.polynomial import Legendre as Leg
+        polar = self.eval_polar(radN)
+        l, res = Leg.fit(self.th, polar.T, 8, domain=[0, 2*np.pi], full=True)
+        return l, res
+
 
 #    def invertedpolar(self, radN, polN, inv='basex'):
 #        """ Project the inverted image onto a polar grid."""
@@ -287,6 +290,7 @@ class PolarImg(np.ndarray):
         return np.ndarray.__new__(self, shape=size, dtype=np.float_,
                                   buffer=frame.copy().data, order='C')
 
+
 #==============================================================================
 #==============================================================================
 
@@ -317,20 +321,20 @@ class CommonMethods(object):
 
     def __push_fig(self, img, tag='frame', mode='lin'):
         """ """
-        if tag == 'map':
-            img = img.
+#       if tag == 'map':
+#           img = img.
         if mode == 'lin':
             self.pl.vmiplot(img)
         elif mode == 'log':
             self.pl.logplot(img)
 
-        plt.savefig('%s-%s-%s.svg' % (self.hdf, tag, mode)
+        plt.savefig('%s/%s-%s-%s.svg' % (self.hdf, self.name, tag, mode))
         plt.close()
 
     def __push_plot(self, obj, tag):
 
         obj.plot(subplots=True)
-        plt.savefig('%s-%s.svg' % (self.hdf, tag)
+        plt.savefig('%s/%s-%s.svg' % (self.hdf, self.name, tag))
         plt.close()
 
 #==============================================================================
@@ -510,7 +514,7 @@ class ProcessExperiment(CommonMethods):
 
         if seqNo is None:
             if inx is None:
-                raise Exception("Hand over first index if the measurement 
+                raise Exception("Hand over first index if the measurement \
                                  is not a sequence")
             self.mode = 'raw'
             self.name = '-'.join((date, 'raw', self.index))
@@ -571,31 +575,64 @@ class ProcessExperiment(CommonMethods):
     def process(self, overwrite=False):
         h = self.header
         dens, offs = h['mesh density'], h['offset angle']
+        rmax = (dens - 1) / 2
         disp = [h['disp alpha'], h['disp x'], h['disp y']]
         length = h['length']
 
         self.frames = np.zeros((length, dens, dens))
         self.intmap = np.zeros((length, dens))
 
-        sinth = np.sin(np.linspace(0, 2 * np.pi, 513))
-        sinth = np.abs(sinth)
+        th = np.sin(np.linspace(0, 2 * np.pi, 513))
 
         for i in xrange(length):
             fr = Frame(self.data.values[i], offs)
             fr.disp = disp
             fr.interpol()
             self.frames[i] = fr.eval_rect(dens)
-            self.intmap[i] = fr.rad_dist(dens, sinth)
+            self.intmap[i] = fr.rad_dist(dens, th)
 
         self.__propagate_ext(1, overwrite)
 
     def invert(self):
+        h = self.header
+        dens, length = h['mesh density'], h['length']
+        self.inv = vminv.Inverter(rmax, self.inv_dict['l max'])
+        rmax = (dens - 1) / 2
+        dim = self.inv.dim
+
+        methods = {'pBasex': (self.inv.invertPolBasex, [4, inv.lvals, dim], 
+                             [4, dim, dim]),
+                   'MaxEnt': (self.inv.invertMaxEnt, [4, 5, dim], 
+                             [4, dim, dim]),
+                   'Basex' : (self.inv.invertBasex, [1, 5, dim], 
+                             [1, dens, dens])
+                  }
+
+        m = methods[self.inv_dict['inversion method']]
+        self.leg = np.zeros([length] + m[1])
+        self.inv_map = np.zeros([length] + m[2])
+        self.inv_res = inv_map.copy()
+
+        if m[2][0] > 0:
+            prep = vmp.quadrants
+        else:
+            prep = lambda a: a
+
+        for i in xrange(length):
+            rect = RectImg(self.data.values[i])
+            rect = prep(rect)
+            for j in xrange(rect.shape[0]):
+                self.leg[i,j], self.inv_map[i,j], self.inv_res[i,j] = m[0](rect)
+
+        self.__propagate_ext(2, overwrite)
+
 
     def store(self):
         with pd.HDFStore('%s.h5' % self.hdf) as store:
             prop_1D = ['opt']
             prop_2D = ['intmap', 'betamap']
             prop_3D = ['res', 'frames']
+            prop_4D = ['inv_map', 'inv_res']
 
             store['header'] = self.header
 
@@ -627,7 +664,22 @@ class ProcessExperiment(CommonMethods):
                     self.__push_fig(v.values.sum(0), mode='lin', tag=k)
                     self.__push_fig(v.values.sum(0), mode='log', tag=k)
 
+            for k in prop_4D:
+                if hasattr(self, k):
+                    v = pd.Panel4D(self.k)
+                    if self.seqNo: v.labels = self.times
+                    store[k] = v
 
+                    self.__push_fig(v.values.sum((0,1)), mode='lin', tag=k)
+                    self.__push_fig(v.values.sum((0,1)), mode='log', tag=k)
+
+            if hasattr(self, 'leg'):
+                leg = pd.Panel(self.leg)
+                if self.seqNo: leg.items = self.times
+                store['leg'] = leg
+
+                self.__push_fig(leg.values.mean(1)[0], mode='lin', tag='intmap')
+                self.__push_fig(leg.values.mean(1)[1], mode='lin', tag='betamap')
 
 
 def getint(name):

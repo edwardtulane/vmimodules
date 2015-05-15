@@ -22,19 +22,6 @@ from scipy.ndimage.interpolation import map_coordinates
 
 from pBasex import AbelTrans
 
-if 'ab' not in dir():
-    ab = np.load('storage/ab-250-18.npy', mmap_mode='r'
-                )
-                
-if 'bs' not in dir():
-    bs = np.load('storage/bs-250-18.npy' #, mmap_mode='r'
-                )
-                
-if 'FtF' not in dir():
-    FtF = np.load('storage/FtF-250-18.npy', mmap_mode='r'
-                )    
-
-
 
 def testimage(r, the):
     I = \
