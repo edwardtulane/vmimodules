@@ -33,10 +33,11 @@ class Inverter(object):
         self.lvals = (n_even / 2) + 1
         self.n_funs = self.bs.shape[1] / self.lvals
         self.dim = r_max + 1
-        self.__dim2 = np.arange(self.dim) ** 2
+#       self.__dim2 = np.arange(self.dim) ** 2
+        self.__dim2 = np.linspace(0, 1, self.dim) ** 2
 #       self.beta_vec = self.gen_beta_vec(self.lvals)
-        self.th = np.linspace(0, 2*np.pi, 513)
-#       self.th, self.lfuns = self.gen_lfuns(self.lvals)
+#       self.th = np.linspace(0, 2*np.pi, 513)
+        self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
 #   set up a context manager?
     def __enter__(self):
@@ -87,23 +88,25 @@ class Inverter(object):
 
     def invertMaxEnt(self, arr):
         arr_path = os.path.join(mod_home, 'inv')
+        cur_path = os.path.abspath(os.curdir)
         os.chdir(arr_path)
         np.savetxt('tmp_arr' , arr)
 
-        os.system('./MEVIR.elf < tmp_arr')
+        os.system('./MEVIR.elf -R2 tmp_arr')
         os.system('sed -e "s/D/e/g" -i MXLeg.dat')
-
-        return (np.loadtxt('MXLeg.dat').T[1:], 
-                np.loadtxt('MXmap.dat', delimiter=','), 
-                np.loadtxt('MXres.dat', delimiter=',')
-                )
+        leg, invmap, res = (np.loadtxt('MXLeg.dat').T[1:], 
+                            np.loadtxt('MXmap.dat', delimiter=','), 
+                            np.loadtxt('MXres.dat', delimiter=',')
+                        )
+        os.chdir(cur_path)
+        return leg, invmap, res
 
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
                             self.__MTM1, self.__MTM2)
-        leg_p, leg_res = self.get_raddist(bsx)
-        leg_p = np.array(leg_p).T * self.__dim2
-        return leg_p[::2], bsx, res
+        leg_p = self.get_raddist(bsx)
+#       leg_p = leg_p * self.__dim2[None,:]
+        return leg_p, bsx, res
 
     def invertPolBasex(self, arr, reg=1, get_pbsx=False):
             arr = arr.ravel()
@@ -121,20 +124,22 @@ class Inverter(object):
             return leg, inv_map, res
 
     def get_raddist(self, arr):
-            from numpy.polynomial import Legendre as Leg
+            from vmiclass import Frame
             fr = Frame(arr)
             fr.interpol()
             polar = fr.eval_polar(self.dim)
-            polar = polar[:, :258]
-#           polar *= self.__dim2[:, None]
-            th = self.th[:258]
-            leg, res = np.zeros((polar.shape[0], 9)), np.zeros(polar.shape[0])
-            for i in xrange(polar.shape[0]):
-                l, r = Leg.fit(th, polar[i] # * np.sin(th)
-                        , 8,
-                                       domain=[0, np.pi], full=True)
-                leg[i], res[i] = l.coef, res[0]
-            return leg, res
+            polar = vmp.fold(polar, h=1)
+
+            ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
+            leg = integ.romb(ang_prod, axis=1)
+            leg *= self.__dim2
+            leg = leg[:5]
+
+            fac = (np.arange(9) * 2 + 1)
+            fac = fac[::2]
+            leg = fac[:,None] * leg
+
+            return leg
 
 #==============================================================================
 
@@ -165,7 +170,7 @@ class Inverter(object):
 
     def gen_lfuns(self, lvals):
         ll = np.arange(lvals) * 2
-        th = np.linspace(0, np.pi, 2**15+1)
+        th = np.linspace(0, np.pi, 2**9+1)
 #       lfuns = np.zeros((lvals, 2**15+1))
         lfuns = spc.eval_legendre(ll[:, None], np.cos(th))
 #       for i, l in enumerate(ll): 
@@ -194,6 +199,11 @@ if __name__ == '__main__':
     i1 = inv.invertBasex(r)
     i2 = inv.invertMaxEnt(r_qu)
     i3 = inv.invertPolBasex(r_qu)
+
+    plt.plot(i1[0].T)
+    plt.figure()
+    plt.plot(i2[0].T)
+    plt.show()
 #   bsx = r.pBasex()
 #   fold = vminv.pbsx2fold(bsx)
 #   inv = vmp.unfold(fold, 1,1)
