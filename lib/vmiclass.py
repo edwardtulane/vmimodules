@@ -381,12 +381,19 @@ class ParseExperiment(CommonMethods):
             self.mode = 'raw'
             self.index = inx[0]
             self.length = len(inx)
-            self.name = '-'.join((date, 'raw', self.index))
+            self.name = '-'.join((date, 'raw', '%02d' % self.index))
 
             filelist = os.listdir(self.path)
             raws = [l for l in filelist if getint(l) in inx]
+            regex = re.compile('raw$')
+            raws = [l for l in raws 
+                    for m in [regex.search(l)] if m]
             raws.sort(key=getint)
-            assert self.length == len(raws), 'Some rawfiles must be missing'
+            self.length = len(raws)
+            try:
+                assert self.length == len(raws)
+            except:    
+                print 'Some rawfiles must be missing'
 
         else:
             self.mode = 'seq'
@@ -394,7 +401,7 @@ class ParseExperiment(CommonMethods):
             if setup == 'sf':
                 seqdir = os.path.join('Seq', seqdir)
             self.path = os.path.join(self.path, seqdir)
-            self.name = '-'.join((date, 'seq', str(seqNo)))
+            self.name = '-'.join((date, 'seq', '%02d' % seqNo))
 
             filelist = os.listdir(self.path)
             regex = re.compile('raw$')
@@ -406,10 +413,14 @@ class ParseExperiment(CommonMethods):
             metafile = os.path.join(self.basedir, '%s-%s.m' % (date, self.seqNo))
             sffile = os.path.join(self.path, 'TgtPositions.npy')
             if os.path.exists(metafile):
-                self.times = self.get_times(metafile)
+                times = self.get_times(metafile)
+                self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
+                             times])
             elif os.path.exists(sffile):
-                self.times = np.load(sffile)
-                self.times *= mm_to_fs
+                times = np.load(sffile)
+                times *= mm_to_fs
+                self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
+                             times])
             else:
                 self.times = np.linspace(time_dict['t start'],
                                          time_dict['t end'], time_dict['delta t'])
@@ -456,7 +467,7 @@ class ParseExperiment(CommonMethods):
         header.update(self.frame_dict)
 
         if hasattr(self, 'times'):
-            tmin, tmax = self.times.min(), self.times.max()
+            tmin, tmax = self.times.levels[-1].min(), self.times.levels[-1].max()
             header['t start'] = tmin
             header['t end'] = tmax
             header['delta t'] = (tmax - tmin) / np.float(self.length)
@@ -498,14 +509,14 @@ class ParseExperiment(CommonMethods):
             store['header'] = header[self.cols]
             store['props'] = props
 
-            raws = pd.Panel(self.raw_data)
+#           raws = pd.Panel(self.raw_data)
             frames = pd.Panel(self.frames)
 
             if hasattr(self, 'times'):
-                raws.items = self.times
+#               raws.items = self.times
                 frames.items = self.times
 
-            store['raws'] = raws
+#           store['raws'] = raws
             store['frames'] = frames
 
             self.push_fig(self.frames.sum(0), mode='lin')
@@ -646,7 +657,7 @@ class ProcessExperiment(CommonMethods):
 
         methods = {'pBasex': (self.inv.invertPolBasex, [4, self.inv.lvals, dim], 
                              [4, dim, dim]),
-                   'MaxEnt': (self.inv.invertMaxEnt, [4, 5, dim], 
+                   'MaxEnt': (self.inv.invertMaxEnt, [4, 4, dim], 
                              [4, dim, dim]),
                    'Basex' : (self.inv.invertBasex, [1, 5, dim], 
                              [1, dens, dens])
@@ -735,7 +746,8 @@ def getint(name):
         basename = name.partition('.')[0]
         num = basename.split('-')[-1]
         num = num.split('q')[-1]
-        return int(num)
+        try: return int(num)
+        except: return None
 
 
 if __name__ == '__main__':
