@@ -33,10 +33,7 @@ class Inverter(object):
         self.lvals = (n_even / 2) + 1
         self.n_funs = self.bs.shape[1] / self.lvals
         self.dim = r_max + 1
-#       self.__dim2 = np.arange(self.dim) ** 2
         self.__dim2 = np.linspace(0, 1, self.dim) ** 2
-#       self.beta_vec = self.gen_beta_vec(self.lvals)
-#       self.th = np.linspace(0, 2*np.pi, 513)
         self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
 #   set up a context manager?
@@ -92,7 +89,7 @@ class Inverter(object):
         os.chdir(arr_path)
         np.savetxt('tmp_arr' , arr)
 
-        os.system('./MEVIR.elf -R2 tmp_arr')
+        os.system('./MEVIR.elf -T4 tmp_arr')
         os.system('sed -e "s/D/e/g" -i MXLeg.dat')
         leg, invmap, res = (np.loadtxt('MXLeg.dat').T[1:], 
                             np.loadtxt('MXmap.dat', delimiter=','), 

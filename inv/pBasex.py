@@ -28,6 +28,9 @@ import scipy.special as legfuns
 from scipy import integrate
 import scipy.interpolate as intpol
 
+import numexpr as ne
+import bottleneck as bn
+
 
 
 def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
@@ -173,7 +176,7 @@ def AbelInt(f):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 450
+    r_max = 200
     sigma = 1.00
     n_even = 16
     n_odd = 0

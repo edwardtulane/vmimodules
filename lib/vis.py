@@ -40,7 +40,21 @@ class Plotter(object):
 
         return fig, ax
 
-    def logplot(self, frame, vmin=0, vmax=0):
+    def linplot(self, frame, vmin=0, vmax=0, aspect='equal'):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+    #    fig.subplots_adjust(left=0.25, bottom=0.25)
+        if not vmin: vmin = frame.min().clip(min=0)
+        if not vmax: vmax = frame.max() * 0.8
+
+        clrmap = plt.cm.gnuplot2
+
+        img = ax.imshow(frame, cmap=clrmap, origin='lower', aspect=aspect,
+                        interpolation='sinc', norm=Normalize(vmin=vmin, vmax=vmax))
+        cbar = fig.colorbar(img)
+        return fig, ax
+
+    def logplot(self, frame, vmin=0, vmax=0, aspect='equal'):
         fig = plt.figure()
         ax = fig.add_subplot(111)
     #    fig.subplots_adjust(left=0.25, bottom=0.25)
@@ -49,9 +63,19 @@ class Plotter(object):
 
         clrmap = plt.cm.gnuplot2
 
-        img = ax.imshow(frame, cmap=clrmap, origin='lower',
+        img = ax.imshow(frame, cmap=clrmap, origin='lower', aspect=aspect,
                         interpolation='sinc', norm=LogNorm(vmin=vmin, vmax=vmax))
         cbar = fig.colorbar(img)
+        return fig, ax
+
+    def lindiff(self, frame):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        vsym = np.max([np.abs(frame.min()), np.abs(frame.max())]) * 0.8
+        clrmap = plt.cm.seismic
+        img = ax.imshow(frame, cmap=clrmap, origin='lower', aspect='equal',
+                        interpolation='sinc', norm=Normalize(vmin=-1*vsym, vmax=vsym))
+        return fig, img
 
     def diffplot(self, fra, frb, fac=1.0):
         frame = fra - fac * frb
@@ -143,7 +167,7 @@ class Plotter(object):
         cntr = self._cntr
         plt.scatter(cntr, cntr, c='r', marker='+')
         vmp.plot_circles(ax, cntr, cntr)
-        line1 = plt.Line2D([cntr, cntr], [0, 2 * cntr], c='r')
-        line2 = plt.Line2D([0, 2 * cntr], [cntr, cntr], c='r')
+        line1 = plt.Line2D([cntr, cntr], [0, 2 * cntr], c='r', linewidth=1)
+        line2 = plt.Line2D([0, 2 * cntr], [cntr, cntr], c='r', linewidth=1)
         ax.add_artist(line1)
         ax.add_artist(line2)
