@@ -68,12 +68,13 @@ class Plotter(object):
         cbar = fig.colorbar(img)
         return fig, ax
 
-    def lindiff(self, frame):
+    def lindiff(self, frame, vsym=0, aspect='equal'):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        vsym = np.max([np.abs(frame.min()), np.abs(frame.max())]) * 0.8
+        if not vsym:
+            vsym = np.max([np.abs(frame.min()), np.abs(frame.max())]) * 0.8
         clrmap = plt.cm.seismic
-        img = ax.imshow(frame, cmap=clrmap, origin='lower', aspect='equal',
+        img = ax.imshow(frame, cmap=clrmap, origin='lower', aspect=aspect,
                         interpolation='sinc', norm=Normalize(vmin=-1*vsym, vmax=vsym))
         return fig, img
 
@@ -110,7 +111,7 @@ class Plotter(object):
         ax = fig.add_subplot(111)
         fig.subplots_adjust(left=0.25, bottom=0.25)
         vsym = np.max([np.abs(frame.min()), np.abs(frame.max())])
-        clrmap = plt.cm.gnuplot2
+        clrmap = plt.cm.seismic
 
         img = ax.imshow(frame, cmap=clrmap, origin='lower',
                         interpolation='sinc', norm=Normalize(vmin=-1*vsym, vmax=vsym))
@@ -120,13 +121,13 @@ class Plotter(object):
         axfac = fig.add_axes([0.25, 0.1, 0.65, 0.03], axisbg=axcolor)
         axsym = fig.add_axes([0.25, 0.15, 0.65, 0.03], axisbg=axcolor)
 
-        sfac = Slider(axfac, 'factor', 0.7, 5.0, valinit=fac)
+        sfac = Slider(axfac, 'factor', 0.7, 1.3, valinit=fac)
         ssym = Slider(axsym, 'scale', 0.5 * vsym , 1.5 * vsym, valinit=vsym)
 
         def update(val):
             diff = (fra - sfac.val * frb) #/ (fra + sfac.val * frb)
             upd = ax.imshow(diff, cmap=clrmap, origin='lower',
-                        interpolation='sinc', norm=Normalize(vmin=-1*vsym, vmax=vsym))
+                        interpolation='sinc', norm=Normalize(vmin=-1*ssym.val, vmax=ssym.val))
             fig.canvas.update()
         sfac.on_changed(update)
         ssym.on_changed(update)
@@ -160,9 +161,9 @@ class Plotter(object):
         ssym.on_changed(update)
 
 
-    def plotCentre(self, fr):
+    def plotCentre(self, fr, vmax=0):
         """ Plot a cross to chosen centre and a number of circles around it """
-        fig, ax = self.vmiplot(fr)
+        fig, ax = self.linplot(fr, vmax=vmax)
         self._cntr = (fr.shape[0] - 1) / 2
         cntr = self._cntr
         plt.scatter(cntr, cntr, c='r', marker='+')

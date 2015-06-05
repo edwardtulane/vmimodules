@@ -8,6 +8,7 @@ Created on Wed Sep 24 20:19:00 2014
 import sys, os
 
 import numpy as np
+import scipy as sp
 import scipy.special as spc
 import scipy.integrate as integ
 import proc as vmp
@@ -83,20 +84,20 @@ class Inverter(object):
 
 #==============================================================================
 
-    def invertMaxEnt(self, arr):
+    def invertMaxEnt(self, arr, T=0, P=2):
         arr_path = os.path.join(mod_home, 'inv')
         cur_path = os.path.abspath(os.curdir)
         os.chdir(arr_path)
         np.savetxt('tmp_arr' , arr)
 
-        os.system('./MEVIR.elf -T4 tmp_arr')
+        os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
         os.system('sed -e "s/D/e/g" -i MXLeg.dat')
         leg, invmap, res = (np.loadtxt('MXLeg.dat').T[1:], 
                             np.loadtxt('MXmap.dat', delimiter=','), 
-                            np.loadtxt('MXres.dat', delimiter=',')
+                            np.loadtxt('MXsim.dat', delimiter=',')
                         )
         os.chdir(cur_path)
-        return leg, invmap, res
+        return leg, invmap, arr - res
 
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
@@ -107,7 +108,7 @@ class Inverter(object):
 
     def invertPolBasex(self, arr, reg=1, get_pbsx=False):
             arr = arr.ravel()
-            pbsx = np.dot(np.linalg.inv(self.FtF + reg * np.eye(self.FtF.shape[0])), 
+            pbsx = np.dot(sp.linalg.inv(self.FtF + reg * np.eye(self.FtF.shape[0])), 
                    np.dot(self.ab, arr))
             if get_pbsx:
                 return pbsx

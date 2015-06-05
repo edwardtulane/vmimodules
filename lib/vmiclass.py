@@ -205,7 +205,12 @@ class Frame(np.ndarray):
         for k, img in enumerate(quads):
             pb[k] = inv.invertPolBasex(img, get_pbsx=True)
 #       dev = pb[:3].std(axis=0).sum()
-        dev = bn.nansum(bn.nanstd(pb[:3], axis=0))
+#       mean = vmp.fold(rect_in, 1, 1)
+#       mp = inv.invertPolBasex(img, get_pbsx=True)
+        pb /= bn.nansum(pb[:,:inv.n_funs], axis=1)[:,None]
+#       diff = pb - mp[None, :]
+#       dev = bn.ss(diff[:,:inv.n_funs*3+1])
+        dev = bn.nansum(bn.nanstd(pb[:,:inv.n_funs*2], axis=0))
         return dev
 
 
@@ -223,7 +228,7 @@ class Frame(np.ndarray):
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
-            print 'Writing optimised centre and angular offset'
+            print 'Writing angular offset and optimised centre: %r' % (self.res.x)
             self.disp += self.res.x
         del inv
 
@@ -271,21 +276,23 @@ class RectImg(Frame):
 
     def __eval_bg_fac(self, fac, bg, inv):
         frame = self - fac * bg
+#       frame[frame < 0] = 0
 
         quads = vmp.quadrants(frame)
-        pb = np.zeros((4, inv.FtF.shape[0]))
+        pb = np.zeros((4, inv.lvals, inv.dim))
         for k, img in enumerate(quads):
-            pb[k] = inv.invertPolBasex(img, get_pbsx=True)
-#       dev = pb[:3].std(axis=0).sum()
-        dev = bn.ss(pb)
+            pb[k] = inv.invertPolBasex(img, get_pbsx=False)[0]
+        dev = bn.nansum(bn.nanstd(pb[:,0], axis=0))
+#       ints = pb[:,:inv.n_funs]
+#       dev += bn.ss(ints[ints < 0]) * inv.dim
         return dev
 
 
     def find_bg_fac(self, bg, dens=501):
         """ Subtract a background image with an optimised factor """
-        init_vec = [0]
+        init_vec = [0.1]
         rad = (dens - 1) / 2
-        inv = vminv.Inverter(rad, 16)
+        inv = vminv.Inverter(rad, 8)
         domain = [[0, 2]]
         self.bg_fac = opt.minimize(self.__eval_bg_fac, init_vec, args=(bg, inv),
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
@@ -315,15 +322,17 @@ class PolarImg(np.ndarray):
 #==============================================================================
 
 # all the parameters that come to my mind. may be extended
-header_keys = ['name', 'date', 'status', 'mode', 'seqNo', 
+header_keys = ['name', 'date', 'setup', 'status', 'kind', 'seqNo', 
                'index', 'length', 'access', 'background', 'path', 'hdf']
 time_keys = ['t start', 't end', 'delta t']
 meta_keys = ['particle', 'Rep', 'Ext', 'MCP', 'Phos', 
                     'probe wavelength', 'pump wavelength', 
-                    'molecule', 'fragment', 'charge', 'dilution', 'acqNo']
+                    'probe power', 'pump power', 'pump pol',
+                    'molecule', 'fragment', 'charge', 'dilution', 'acqNo', 'mode',
+                    'gate', 'valve', 'p.w.']
 
 frame_keys = ['center x', 'center y', 'offset angle', 'rmax',
-              'mesh density', 'disp alpha', 'disp x', 'disp y']
+              'mesh density', 'disp alpha', 'disp x', 'disp y', 'hot_spots']
 
 center_keys = ['centering method', 'fun(min)', 'opt disp alpha', 'opt disp x', 'opt disp y', 'bg fac med']
 
@@ -350,11 +359,11 @@ class CommonMethods(object):
 class ParseExperiment(CommonMethods):
 
     def __init__(self, date, seqNo=None, inx=None, setup='tw', 
-                 meta_dict={}, frame_dict={}):
+                 meta_dict={}, frame_dict={}, time_dict={}):
         global header_keys, meta_keys, frame_keys, time_keys, mm_to_fs
         vmi_dir = vmimodules.conf.vmi_dir
 
-        self.date = pd.Timestamp(date)
+        self.date, self.setup = pd.Timestamp(date), setup
         self.access = pd.Timestamp(time.asctime())
         self.seqNo, self.inx = seqNo, inx
         
@@ -374,7 +383,7 @@ class ParseExperiment(CommonMethods):
         if self.seqNo is None:
             if self.inx is None:
                 raise Exception("Hand over indices if the measurement is not a sequence")
-            self.mode = 'raw'
+            self.kind = 'raw'
             self.index = inx[0]
             self.length = len(inx)
             self.name = '-'.join((date, 'raw', '%02d' % self.index))
@@ -392,7 +401,7 @@ class ParseExperiment(CommonMethods):
                 print 'Some rawfiles must be missing'
 
         else:
-            self.mode = 'seq'
+            self.kind = 'seq'
             seqdir = '-'.join((date, str(seqNo)))
             if setup == 'sf':
                 seqdir = os.path.join('Seq', seqdir)
@@ -406,7 +415,11 @@ class ParseExperiment(CommonMethods):
             raws.sort(key=getint)
             self.length = len(raws)
 
-            metafile = os.path.join(self.basedir, '%s-%s.m' % (date, self.seqNo))
+            if setup == 'sf':
+                metadir = os.path.join(self.basedir, 'Seq')
+            else:
+                metadir = self.basedir
+            metafile = os.path.join(metadir, '%s-%s.m' % (date, self.seqNo))
             sffile = os.path.join(self.path, 'TgtPositions.npy')
             if os.path.exists(metafile):
                 times = self.get_times(metafile)
@@ -479,30 +492,40 @@ class ParseExperiment(CommonMethods):
                     line = line.split('[')[-1]
                     line = line.split(']')[0]
                     time_string = line
+        time_string = time_string.replace(',', '.')
         s = StringIO(time_string)
         return np.loadtxt(s)
 
     def get_props(self):
 
         self.ints = bn.nansum(self.frames.astype(np.float_), axis=(-1, -2))
+        self.meds = bn.nanmedian(self.frames.astype(np.float_), axis=(-1, -2))
         dists = self.frames.values - bn.nanmean(self.frames.astype(np.float_),
                 axis=0)
         self.dist = bn.ss(dists, axis=(-1, -2))
 
-        nrm = np.prod(self.frames[0].shape)
-        self.frames = pd.Panel(self.frames.values / self.ints[:, None, None]) * nrm
+        if self.meta_dict['mode'] == 'counting':
+            f = self.frames.values
+            for i in xrange(f.shape[0]):
+                v = f[i]
+                v = v[v >0]
+                self.frames[i] /= np.float(v.min())
+        else:
+            nrm = np.prod(self.frames[0].shape) * 100
+            self.frames = pd.Panel(self.frames.values / self.ints[:, None, None] * nrm)
         dists = self.frames.values - bn.nanmean(self.frames, axis=0)
         self.norm_dist = bn.ss(dists, axis=(-1, -2))
 
         props = {'intensity': pd.Series(self.ints),
                  'distance': pd.Series(self.dist),
-                 'norm distance': pd.Series(self.norm_dist)
+                 'norm distance': pd.Series(self.norm_dist),
+                 'median': pd.Series(self.meds)
                 }
         props = pd.DataFrame(props)
         if hasattr(self, 'times'):
             props.index = self.times
 
-        return props[['intensity', 'distance', 'norm distance']]
+        return props[['intensity', 'distance', 'norm distance', 'median']]
 
     def store(self):
 
@@ -523,9 +546,10 @@ class ParseExperiment(CommonMethods):
 
             fr_mean = bn.nanmean(self.frames, 0)
             with sb.axes_style('white'):
-                f, a = self.pl.linplot(fr_mean)
+                vmax = np.percentile(fr_mean, 99)
+                f, a = self.pl.linplot(fr_mean, vmax=vmax)
                 self.push_fig(mode='lin')
-                f, a = self.pl.logplot(fr_mean / bn.nanmin(fr_mean[fr_mean > 0]))
+                f, a = self.pl.logplot(fr_mean, vmax=vmax)
                 self.push_fig(mode='log')
 
             if self.length > 1:
@@ -573,7 +597,7 @@ class ProcessExperiment(CommonMethods):
 
         else:
             self.mode = 'seq'
-            self.name = '-'.join((date, 'seq', str(seqNo)))
+            self.name = '-'.join((date, 'seq', '%02d' % self.seqNo))
 
         self.hdf_dir = self.hdf
 
@@ -620,7 +644,7 @@ class ProcessExperiment(CommonMethods):
             if hasattr(self, k):
                 self.header[k] = getattr(self, k)
 
-    def center(self, cntr=True, ang=False, overwrite=False):
+    def center(self, cntr=True, ang=False, overwrite=True):
         h = self.header
         dens, offs = h['mesh density'], h['offset angle']
         length = h['length']
@@ -671,7 +695,7 @@ class ProcessExperiment(CommonMethods):
                 sb.kdeplot(self.bg_fac[:,0], self.bg_fac[:,1], shade=True, cmap='Blues')
                 self.push_fig(tag='bg_fac', mode='corr')
 
-    def process(self, overwrite=False):
+    def process(self, overwrite=True, crop=0):
         h = self.header
         dens, offs = h['mesh density'], h['offset angle']
         rmax = (dens - 1) / 2
@@ -680,12 +704,13 @@ class ProcessExperiment(CommonMethods):
 
         self.frames = np.zeros((length, dens, dens))
         self.intmap = np.zeros((length, rmax + 1))
-        self.neg = np.zeros(length)
 
         self.inv = vminv.Inverter(rmax, 8)
 
         pbar = ProgressBar().start()
         pbar.maxval = length
+
+        radint =  np.linspace(0, 1, self.inv.dim) ** 2
 
         for i in xrange(length):
             if hasattr(self, 'bg'):
@@ -694,43 +719,43 @@ class ProcessExperiment(CommonMethods):
                 fr = Frame(self.data.values[i], offs)
             fr.disp = disp
             fr.interpol()
-            self.frames[i] = fr.eval_rect(dens)
-            self.intmap[i] = self.inv.get_raddist(fr)[0]
-            self.neg[i] = bn.nansum(self.frames[i][self.frames[i] < 0])
+            r = fr.eval_rect(dens)
+            if crop:
+                rect = vmp.crop_circle(r, crop)
+            self.frames[i] = r
+            self.intmap[i] = self.inv.get_raddist(fr)[0] / radint
             pbar.update(i)
 
         self.__propagate_ext(1, overwrite)
         self.status = 'processed'
 
         fr_mean = bn.nanmean(self.frames, 0)
+        self.intmap = np.nan_to_num(self.intmap)
 
         with sb.axes_style('white'):
-            f, a = self.pl.linplot(fr_mean)
+            vmax = np.percentile(fr_mean, 99)
+            f, a = self.pl.linplot(fr_mean, vmax=vmax)
             self.push_fig(mode='lin')
-            f, a = self.pl.logplot(fr_mean / bn.nanmin(fr_mean[fr_mean > 0]))
+            f, a = self.pl.logplot(fr_mean + 1E-5, vmax=vmax)
             self.push_fig(mode='log')
 
             if length > 1:
-                self.pl.linplot(self.intmap, aspect='auto')
+                intmax = np.percentile(self.intmap, 99)
+                self.pl.linplot(self.intmap, aspect='auto', vmax=intmax)
                 self.push_fig(tag='intmap', mode='lin')
-                self.pl.logplot(self.intmap, aspect='auto')
+                sb.tsplot(self.intmap, err_style=['unit_traces', 'ci_band'],
+                          err_palette='YlOrRd_d')
+                self.push_fig(tag='intmap', mode='ts')
+                self.pl.logplot(self.intmap + 1E-5, aspect='auto', vmax=intmax)
                 self.push_fig(tag='intmap', mode='log')
             else:
                 sb.plt.plot(self.intmap[0])
                 self.push_fig(tag='raddist', mode='lin')
 
-            self.pl.plotCentre(bn.nanmean(self.frames, 0))
+            self.pl.plotCentre(bn.nanmean(self.frames, 0), vmax=vmax)
             self.push_fig(tag='centre', mode='crosshair')
 
-        if hasattr(self, 'bg'):
-            fig, axs = plt.subplots(2, 1, sharex=True)
-            axs[0].set_title = 'negative pixel values'
-            sb.kdeplot(self.neg, ax=axs[0])
-            sb.boxplot(self.neg, ax=axs[1], vert=False)
-            plt.draw()
-            self.push_fig(tag='neg', mode='dist')
-
-    def invert(self, overwrite=False, crop=0):
+    def invert(self, overwrite=True):
         h = self.header
         dens, length = h['mesh density'], h['length']
         rmax = (dens - 1) / 2
@@ -758,9 +783,7 @@ class ProcessExperiment(CommonMethods):
         pbar.maxval = length
         for i in xrange(length):
             rect = self.data.values[i]
-            if crop:
-                rect = vmp.crop_circle(rect, crop)
-            rect *= 1000
+#           rect *= 1000
             rect = prep(rect)
             for j in xrange(rect.shape[0]):
                 self.leg[i,j], self.inv_map[i,j], self.inv_res[i,j] = m[0](rect[j])
@@ -771,27 +794,38 @@ class ProcessExperiment(CommonMethods):
         self.cols += inv_keys
         self.header = self.header.append(pd.Series(self.inv_dict))
 
-        fr_mean = bn.nanmean(self.inv_map, (0, 1))
-        res_mean = bn.nanmean(self.inv_res, (0, 1))
-        rss = bn.ss(self.inv_res, (2,3))
+        fr_mean = bn.nanmean(self.inv_map, (0))
+        fr_mean = vmp.compose(fr_mean)
+        vmax = np.percentile(fr_mean, 99)
+        res_mean = bn.nanmean(self.inv_res, (0))
+        res_mean = vmp.compose(res_mean)
+        resmax = np.percentile(res_mean, 99)
+        rss = bn.ss(self.inv_res, (2,3)) / (self.inv.dim ** 2)
         leg_mean = bn.nanmean(self.leg, axis=1)
 
         with sb.axes_style('white'):
-            f, a = self.pl.linplot(vmp.unfold(fr_mean, 1, 1))
+            f, a = self.pl.linplot(fr_mean, vmax=vmax)
             self.push_fig(mode='lin')
-            f, a = self.pl.logplot(vmp.unfold(fr_mean, 1, 1).clip(0) / 
-                                   bn.nanmin(fr_mean[fr_mean > 1E-4]))
+            f, a = self.pl.logplot(fr_mean.clip(0) + 1E-5, vmax=vmax)
             self.push_fig(mode='log')
 
-            f, a = self.pl.lindiff(vmp.unfold(res_mean, 1, 1))
+            f, a = self.pl.lindiff(res_mean, vsym=resmax)
             f.colorbar(a)
             self.push_fig(tag='res', mode='lin')
             
             if length > 1:
-                self.pl.linplot(leg_mean[:,0], aspect='auto')
+                vmax = np.percentile(leg_mean[:,0], 99)
+                self.pl.linplot(leg_mean[:,0], vmax=vmax, aspect='auto')
                 self.push_fig(tag='intmap', mode='lin')
-                self.pl.linplot(leg_mean[:,1], aspect='auto')
+                self.pl.lindiff(leg_mean[:,1], vsym=vmax, aspect='auto')
                 self.push_fig(tag='beta', mode='lin')
+
+                fig, axs = plt.subplots(2, 1, sharex=True)
+                sb.tsplot(leg_mean[:,0], err_style=['unit_traces', 'ci_band'],
+                          err_palette='YlOrRd_d', ax=axs[0])
+                sb.tsplot(leg_mean[:,1], err_style=['unit_traces', 'ci_band'],
+                          err_palette='YlOrRd_d', ax=axs[1])
+                self.push_fig(tag='dist', mode='ts')
             else:
                 f = plt.figure()
                 f.add_subplot(211)
@@ -810,7 +844,7 @@ class ProcessExperiment(CommonMethods):
 
     def store(self):
         with pd.HDFStore('%s.h5' % self.hdf) as store:
-            prop_1D = ['opt', 'bg_fac', 'neg']
+            prop_1D = ['opt', 'bg_fac']
             prop_2D = ['intmap', 'betamap']
             prop_3D = ['res', 'frames']
             prop_4D = ['inv_map', 'inv_res', 'leg']

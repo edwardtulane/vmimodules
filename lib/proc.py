@@ -13,6 +13,7 @@ TODO: deliberately delete commented blocks
 """
 
 import numpy as np
+import scipy as sp
 import pylab as pl
 
 import copy as cp
@@ -82,7 +83,10 @@ def crop_circle(frame, rmax):
     rad = frame.shape[0]
     XY = np.arange(rad,dtype='float64')
     R = np.sqrt((XY - cx) ** 2 + (XY - cy)[:, None] ** 2)
+    rim = frame[(R>rmax-2) & (R<rmax+2)]
+    frame -= np.mean(rim)
     frame[R > rmax] = 0.0
+    frame[frame < 0] = 0
     return frame
 
 def getintens(frame, cx, cy, rmax):
@@ -150,7 +154,7 @@ def Basex(IM,q1,q2, M, Mc, MTM, MTMc):
     sy = (sz[0]-1)/2
     zIM = np.mat(np.zeros([N,N]))
     zIM[cN-sy:cN+sy+1,cN-sx:cN+sx+1]=np.mat(IM)
-    Ci = np.linalg.inv(MTMc+q2*np.eye(NBF,NBF))*Mc.T*zIM*M*np.linalg.inv(MTM+q1*np.eye(NBF,NBF))
+    Ci = sp.linalg.inv(MTMc+q2*np.eye(NBF,NBF))*Mc.T*zIM*M*sp.linalg.inv(MTM+q1*np.eye(NBF,NBF))
     zIMr = np.dot(Mc,np.dot(Ci,Mc.T))
     ab = np.dot(Mc, Ci).dot(M.T)
     res = (zIM - ab)[cN-sy:cN+sy+1,cN-sx:cN+sx+1]
@@ -270,6 +274,14 @@ def quadrants(img_in):
     q1, q2 = img[cntr_h:,cntr_v:], img[cntr_h:,cntr_v::-1]
     q3, q4 = img[cntr_h::-1,cntr_v::-1], img[cntr_h::-1,cntr_v:]
     return np.asarray([q1, q2, q3, q4])
+
+def compose(quads):
+    qu = cp.deepcopy(quads)
+    cmps = np.zeros((np.asarray(qu[0].shape) * 2 - 1))
+    cntr = qu[0].shape[0] - 1
+    cmps[cntr:, cntr:], cmps[cntr:,cntr::-1] = qu[0],  qu[1]
+    cmps[cntr::-1,cntr::-1], cmps[cntr::-1,cntr:] = qu[2], qu[3]
+    return cmps
 
 def halves(img_in):
     img = cp.deepcopy(img_in)

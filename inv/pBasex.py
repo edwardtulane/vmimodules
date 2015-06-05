@@ -176,9 +176,9 @@ def AbelInt(f):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 200
+    r_max = 400
     sigma = 1.00
-    n_even = 16
+    n_even = 32
     n_odd = 0
 
     blowup = 8
