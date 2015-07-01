@@ -7,7 +7,7 @@ from matplotlib.colors import LogNorm, Normalize, SymLogNorm
 import matplotlib.style as style
 from matplotlib.widgets import Slider, Button
 
-import proc as vmp
+from . import proc as vmp
 # Scientific constants
 H=27.211; #Hartree in [eV]
 

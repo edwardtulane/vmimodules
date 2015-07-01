@@ -32,9 +32,9 @@ import scipy.signal as sig
 # import scipy.special as bessel
 # import copy as cp
 #
-import proc as vmp
-import inv as vminv
-from vis import Plotter
+from . import proc as vmp
+from . import inv as vminv
+from .vis import Plotter
 import seaborn as sb
 sb.set_context('talk')
 #import matplotlib.gridspec as gridspec
@@ -79,7 +79,7 @@ class RawImage(np.ndarray):
 
         if not self.cx or not self.cy:
             self.cy, self.cx = (np.asarray(raw.shape) - 1) / 2
-            warnings.warn(u'No valid center given. Using (%d, %d)' % (self.cx,
+            warnings.warn('No valid center given. Using (%d, %d)' % (self.cx,
                           self.cy))
 
         if not radius:
@@ -87,7 +87,7 @@ class RawImage(np.ndarray):
             dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
                         size[0] - self.cy - 1])
             self.rad_sq = np.min([dx, dy])
-            warnings.warn(u'No valid radius given. Using %d' % (self.rad_sq))
+            warnings.warn('No valid radius given. Using %d' % (self.rad_sq))
 
         return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
                                   buffer=raw.copy(), order='C')
@@ -125,7 +125,7 @@ class Frame(np.ndarray):
 
 #       if do_intpol:
 #           self.interpol(self)
-#       This doesn't work, requires a Frame instance. __init__() breaks __new__ (?)
+#       This doesn't work, requires a Frame instance. __init__() breaks __new__
 
         return np.ndarray.__new__(self, shape=size, buffer=frame.copy().data,
                                   dtype=frame.dtype.name, order='C')
@@ -204,7 +204,12 @@ class Frame(np.ndarray):
         pb = np.zeros((4, inv.FtF.shape[0]))
         for k, img in enumerate(quads):
             pb[k] = inv.invertPolBasex(img, get_pbsx=True)
+#       dev = pb[:3].std(axis=0).sum()
+#       mean = vmp.fold(rect_in, 1, 1)
+#       mp = inv.invertPolBasex(img, get_pbsx=True)
         pb /= bn.nansum(pb[:,:inv.n_funs], axis=1)[:,None]
+#       diff = pb - mp[None, :]
+#       dev = bn.ss(diff[:,:inv.n_funs*3+1])
         dev = bn.nansum(bn.nanstd(pb[:,:inv.n_funs*2], axis=0))
         return dev
 
@@ -223,7 +228,7 @@ class Frame(np.ndarray):
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
-            print 'Writing angular offset and optimised centre: %r' % (self.res.x)
+            print('Writing angular offset and optimised centre: %r' % (self.res.x))
             self.disp += self.res.x
         del inv
 
@@ -242,7 +247,7 @@ class Frame(np.ndarray):
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
-            print 'Writing optimized centre and angular offset'
+            print('Writing optimized centre and angular offset')
             self.disp += self.res.x
         # Final evaluation
         self.__rotateframe(self.offset + self.disp[0])
@@ -271,14 +276,13 @@ class RectImg(Frame):
 
     def __eval_bg_fac(self, fac, bg, inv):
         frame = self - fac * bg
-        frame[frame < 0] = 0.
+#       frame[frame < 0] = 0
 
         quads = vmp.quadrants(frame)
-        pb = np.zeros(quads.shape)
+        pb = np.zeros((4, inv.lvals, inv.dim))
         for k, img in enumerate(quads):
-            pb[k] = inv.invertMaxEnt(img)[2]
-#       dev = bn.nansum(bn.nanstd(pb[:,0], axis=0))
-        dev = bn.ss(pb)
+            pb[k] = inv.invertPolBasex(img, get_pbsx=False)[0]
+        dev = bn.nansum(bn.nanstd(pb[:,0], axis=0))
 #       ints = pb[:,:inv.n_funs]
 #       dev += bn.ss(ints[ints < 0]) * inv.dim
         return dev
@@ -286,15 +290,15 @@ class RectImg(Frame):
 
     def find_bg_fac(self, bg, dens=501):
         """ Subtract a background image with an optimised factor """
-        init_vec = [0.5]
+        init_vec = [0.1]
         rad = (dens - 1) / 2
-        inv = vminv.Inverter(rad, 8, dryrun=0)
+        inv = vminv.Inverter(rad, 8)
         domain = [[0, 2]]
         self.bg_fac = opt.minimize(self.__eval_bg_fac, init_vec, args=(bg, inv),
                                 method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.bg_fac.success:
-            print 'Found optimum factor: ', self.bg_fac.x
+            print('Found optimum factor: ', self.bg_fac.x)
         del inv
         return self.bg_fac.x, self.bg_fac.fun
 
@@ -369,7 +373,7 @@ class ParseExperiment(CommonMethods):
         
         self.pl = Plotter()
 
-        if 'mesh density' in frame_dict.keys():
+        if 'mesh density' in list(frame_dict.keys()):
             self.dens = frame_dict['mesh density']
         else:
             frame_dict['mesh density'] = global_dens
@@ -394,7 +398,7 @@ class ParseExperiment(CommonMethods):
             try:
                 assert self.length == len(raws)
             except:    
-                print 'Some rawfiles must be missing'
+                print('Some rawfiles must be missing')
 
         else:
             self.kind = 'seq'
@@ -442,16 +446,16 @@ class ParseExperiment(CommonMethods):
 
     def read_data(self):
 
-        if not self.frame_dict.has_key('hot_spots'):
+        if 'hot_spots' not in self.frame_dict:
             self.frame_dict['hot_spots'] = []
-        if not self.frame_dict.has_key('rmax'):
+        if 'rmax' not in self.frame_dict:
             self.frame_dict['rmax'] = 0
-        if not self.frame_dict.has_key('offset angle'):
+        if 'offset angle' not in self.frame_dict:
             self.frame_dict['offset angle'] = 0
 
         img, frames = {}, {}
         d = self.frame_dict
-        for i in xrange(self.length):
+        for i in range(self.length):
             f = os.path.join(self.path, self.inx[i])
             img[i] = RawImage(f, d['center x'], d['center y'],
                               d['rmax'], d['hot_spots'])
@@ -481,7 +485,7 @@ class ParseExperiment(CommonMethods):
 
     def get_times(self, path):
 
-        from StringIO import StringIO
+        from io import StringIO
 
         for line in open(path):
             if line.startswith('MBES_DELAY'):
@@ -502,7 +506,7 @@ class ParseExperiment(CommonMethods):
 
         if self.meta_dict['mode'] == 'counting':
             f = self.frames.values
-            for i in xrange(f.shape[0]):
+            for i in range(f.shape[0]):
                 v = f[i]
                 v = v[v >0]
                 self.frames[i] /= np.float(v.min())
@@ -549,7 +553,7 @@ class ParseExperiment(CommonMethods):
                 self.push_fig(mode='log')
 
             if self.length > 1:
-                for k, v in props.iteritems():
+                for k, v in props.items():
                     fig, axs = plt.subplots(2, 1, sharex=True)
                     axs[0].set_title = '%s distribution' % k
                     sb.kdeplot(v.values, ax=axs[0])
@@ -605,7 +609,7 @@ class ProcessExperiment(CommonMethods):
 
     def __get_ext(self, path, cpi):
         flags = ['c', 'p', 'i']
-        z = zip(flags, cpi)
+        z = list(zip(flags, cpi))
         ext = ['%s%02d' % (f, i) for (f, i) in z if i]
         ext.insert(0, path)
         return '-'.join(ext)
@@ -650,16 +654,16 @@ class ProcessExperiment(CommonMethods):
 
         pbar = ProgressBar().start()
         pbar.maxval = length
-        for i in xrange(length):
+        for i in range(length):
             fr = Frame(self.data.values[i], offs)
             if hasattr(self, 'bg'):
                 fr.interpol()
-                r = fr.eval_rect(151)
+                r = fr.eval_rect(dens)
                 if not isinstance(self.bg, Frame):
                     bg = Frame(self.bg, offs)
                     bg.interpol()
-                bg = bg.eval_rect(151)
-                self.bg_fac[i] = r.find_bg_fac(bg, 151)
+                bg = bg.eval_rect(dens)
+                self.bg_fac[i] = r.find_bg_fac(bg, dens)
                 fr = Frame(self.data.values[i] - self.bg_fac[i,0] * self.bg, offs)
             fr.interpol()
             fr.centre_pbsx(cntr, ang, dens)
@@ -671,7 +675,7 @@ class ProcessExperiment(CommonMethods):
         self.header['bg fac med'] = np.median(self.bg_fac[:,0])
         self.__propagate_ext(0, overwrite)
         self.status = 'centered'
-        self.opt = zip(center_keys[1:], self.opt.T)
+        self.opt = list(zip(center_keys[1:], self.opt.T))
         self.opt = dict(self.opt)
         self.frames = self.data.values
 
@@ -708,7 +712,7 @@ class ProcessExperiment(CommonMethods):
 
         radint =  np.linspace(0, 1, self.inv.dim) ** 2
 
-        for i in xrange(length):
+        for i in range(length):
             if hasattr(self, 'bg'):
                 fr = Frame(self.data.values[i] - self.bg_fac[i,0] * self.bg, offs)
             else:
@@ -777,11 +781,11 @@ class ProcessExperiment(CommonMethods):
             prep = lambda a: a
         pbar = ProgressBar().start()
         pbar.maxval = length
-        for i in xrange(length):
+        for i in range(length):
             rect = self.data.values[i]
 #           rect *= 1000
             rect = prep(rect)
-            for j in xrange(rect.shape[0]):
+            for j in range(rect.shape[0]):
                 self.leg[i,j], self.inv_map[i,j], self.inv_res[i,j] = m[0](rect[j])
             pbar.update(i)
 
@@ -882,7 +886,7 @@ def getint(name):
 
 
 if __name__ == '__main__':
-    from vis import *
+    from .vis import *
     t = RawImage(mod_home + '/ati-calibration.raw', xcntr=512, ycntr=465, radius=250)
     f = t.crop_square()
     f.interpol()
