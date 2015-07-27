@@ -67,8 +67,8 @@ class Inverter(object):
         else:
             pass
 
-        F1 = np.empty((arr.fourt.shape[0], dim + 1), dtype='complex')
-        arr.FHT = np.empty((arr.fourt.shape[0], dim + 1), dtype='complex')
+        F1 = np.zeros((arr.fourt.shape[0], dim + 1), dtype='complex')
+        arr.FHT = np.zeros((arr.fourt.shape[0], dim + 1), dtype='complex')
 
         for i, line in enumerate(arr.fourt):
             ft_cR = sig.cspline1d(line.real)

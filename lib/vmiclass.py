@@ -56,12 +56,11 @@ class RawImage(np.ndarray):
     VMI class for reading and manipulating single frames
     Contains methods for orienting and interpolating a single frame,
     also operator overloading for manipulations between images
-    Inversion methods are called from an Inversion class object (TODO)
 
     Methods:
     -- crop_square: cuts out a square and may be supplied with the rotation angle
     """
-
+    
     def __new__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[]):
 
         if type(file) is str:
