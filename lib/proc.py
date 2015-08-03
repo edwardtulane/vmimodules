@@ -32,6 +32,22 @@ def rawread(filename):
 
     return M
 
+def read_singleshots(fname):
+    """
+    """
+    arr = np.memmap(fname, dtype=np.int32,mode='r')
+    x_dim, y_dim, seqlen = arr[0:3]
+    slice_len = (x_dim * y_dim) / 4
+    ids = np.zeros(seqlen, dtype=np.int32)
+    ss_arr = np.zeros((seqlen, y_dim, x_dim), dtype=np.int8)
+    
+    for i in range(seqlen):
+        ids[i] = arr[3 + i * (slice_len + 1)]
+        int8view = arr[3 + 1 + i * (slice_len + 1) 
+                      :3 + (i+1) * (slice_len + 1)].view(np.int8)
+        ss_arr[i] = int8view.reshape((y_dim, x_dim))
+        
+    return ids, ss_arr
 
 def centre_crop(M, cx, cy, crop=0):
     """
@@ -192,6 +208,18 @@ def gen_polar(radius, radN, polN, disp):
 
     return [y_coord + disp[1], x_coord + disp[0]]
 
+def gen_qrs_grid(radius, radN, polN, disp):
+    """
+    Generate a polar grid of given radius and density in both radius and angles
+    14-08-20: Approved
+    """
+    radii = np.linspace(0, radius, radN)
+    angles = np.linspace(0, 2*np.pi, polN)
+    pol_coord, rad_coord = np.meshgrid(angles, radii)
+    x_coord = rad_coord * np.sin(pol_coord) + radius
+    y_coord = rad_coord * np.cos(pol_coord) + radius
+
+    return [y_coord + disp[1], x_coord + disp[0]]
 
 def plot_circles(axes, x_cntr, y_cntr, fro=5, to=120, Ncirc=7):
     """
