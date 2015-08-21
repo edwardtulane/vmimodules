@@ -55,7 +55,7 @@ def find_otsus_thr(img):
         raise Exception("Otsu's thresholding failed!")
 
 
-def seg_lev(img, no_lev):
+def seg_lev(img, levels):
     """
     Linear inclusive graylevel segmentation of the image 'img'.
 
@@ -63,16 +63,17 @@ def seg_lev(img, no_lev):
              to the lowest.
     """
 
-    img_seg = np.zeros([no_lev] + list(img.shape), dtype=np.bool_)
-    levels = np.linspace(0, 1, no_lev + 1)
-    levels = levels[-2::-1]
-    for i in range(no_lev):
+    dim = levels.shape[0]
+    img_seg = np.zeros([dim] + list(img.shape), dtype=np.bool_)
+
+    for i in range(dim):
         slc = img_seg[i]
         slc[(img > levels[i])] = True
+
     return img_seg
 
 
-def detect_hits_patch(img, no_levels, struct):
+def detect_hits_patch(img, levels, struct):
     """
     Inner peak finding loop for the isolated patches.
 
@@ -83,7 +84,7 @@ def detect_hits_patch(img, no_levels, struct):
     dim = list(img.shape)
     seeds = np.ndarray([0] + dim, dtype=np.bool_)
 
-    seg = seg_lev(img, no_levels)
+    seg = seg_lev(img, levels)
     null_map = np.zeros(dim, dtype=np.bool_)
 
     for img in seg:
@@ -113,7 +114,7 @@ def detect_hits_patch(img, no_levels, struct):
 
 
 def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
-                    imax=0, dilate=True):
+                    imax=0, dilate=True, global_analysis=False):
     """
     Outer peak finding loop for an entire VMI image.
 
@@ -133,6 +134,8 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
     prop_cols = ['area', 'volume', 'y_gau', 'x_gau', 'y_sig', 'x_sig', 'qmax',
                  'discriminant', 'ls_rank', 'cond_no', 'ellip', 'resid']
 
+    levels = np.linspace(0,1, no_levels)
+    levels = levels[::-1]
     struct = im.generate_binary_structure(2, 1)
 
     # Vandermonde exponents
@@ -168,7 +171,17 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
     
     hits_mlt, prop_mlt = list(), list()
     prop_sgl = list()
-    
+
+    if global_analysis:
+        hit_dist = list()
+
+        for (i, obj) in enumerate(obs_gl):
+            patch = img_wrk[obj]
+            ma = np.where(lab_gl[obj] == i + 1, True, False)
+            hit_dist.append(patch[ma])
+
+        return pd.Series([v for h in hit_dist for v in h if v > 0])
+
     for (i, obj) in enumerate(obs_gl):
         y_pos, x_pos = obj[0].start, obj[1].start
         p = np.array([y_pos, x_pos])
@@ -179,7 +192,8 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
         patch_strpd = patch.copy()
         ma = np.where(lab_gl[obj] == i + 1, True, False)
         patch_strpd[~ma] = -1.
-   
+
+
         hits_lc = detect_hits_patch(patch_strpd, no_levels, struct)
         prop_sgl.append( (x_wid, y_wid, len(hits_lc)) )
 
@@ -208,6 +222,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
 
             prop_mlt.append( (are, vol, y_gau + p[0], x_gau + p[1], sig_y, sig_x, qmax,
                               dscr, rank, cond, ellip, res) )
+
 
     assert len(prop_mlt) == np.sum([v[2] for v in prop_sgl])
 

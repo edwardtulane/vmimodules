@@ -84,7 +84,7 @@ class RawImage(np.ndarray):
         if not radius:
             size = raw.shape
             dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
-                        size[0] - self.cy - 1])
+                             size[0] - self.cy - 1])
             self.rad_sq = np.min([dx, dy])
             warnings.warn(u'No valid radius given. Using %d' % (self.rad_sq))
 
@@ -116,7 +116,7 @@ class Frame(np.ndarray):
         self.cy, self.cx = (np.asarray(frame.shape) - 1) / 2
         size = frame.shape
         dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
-                        size[0] - self.cy - 1])
+                         size[0] - self.cy - 1])
         self.rad_sq = np.min([dx, dy])
         self.diam = size[0]
         self.offset = offs
@@ -140,7 +140,7 @@ class Frame(np.ndarray):
             self.ck = self.__ck
         else:
             self.ck = ndimg.rotate(self.__ck, phi,
-                               reshape=False, prefilter=False)
+                                   reshape=False, prefilter=False)
 
     def eval_rect(self, density=global_dens, displace=[0., 0.], phi=0):
         """ Project the image onto a rectangular grid with given spacing """
@@ -261,7 +261,7 @@ class RectImg(Frame):
         size = frame.shape[-2:]
         self.cy, self.cx = (np.asarray(size) - 1) / 2
         dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
-                        size[0] - self.cy - 1])
+                         size[0] - self.cy - 1])
         self.rad_sq = np.min([dx, dy])
         self.diam = size[0]
 
@@ -290,8 +290,8 @@ class RectImg(Frame):
         inv = vminv.Inverter(rad, 8, dryrun=0)
         domain = [[0, 2]]
         self.bg_fac = opt.minimize(self.__eval_bg_fac, init_vec, args=(bg, inv),
-                                method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
-                                tol=1E-5, options={'disp': True})
+                                   method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
+                                   tol=1E-5, options={'disp': True})
         if self.bg_fac.success:
             print 'Found optimum factor: ', self.bg_fac.x
         del inv
@@ -321,10 +321,10 @@ header_keys = ['name', 'date', 'setup', 'status', 'kind', 'seqNo',
                'index', 'length', 'access', 'background', 'path', 'hdf']
 time_keys = ['t start', 't end', 'delta t']
 meta_keys = ['particle', 'Rep', 'Ext', 'MCP', 'Phos', 
-                    'probe wavelength', 'pump wavelength', 
-                    'probe power', 'pump power', 'pump pol',
-                    'molecule', 'fragment', 'charge', 'dilution', 'acqNo', 'mode',
-                    'gate', 'valve', 'p.w.']
+             'probe wavelength', 'pump wavelength', 
+             'probe power', 'pump power', 'pump pol',
+             'molecule', 'fragment', 'charge', 'dilution', 'acqNo', 'mode',
+             'gate', 'valve', 'p.w.']
 
 frame_keys = ['center x', 'center y', 'offset angle', 'rmax',
               'mesh density', 'disp alpha', 'disp x', 'disp y', 'hot_spots']
@@ -346,7 +346,7 @@ class CommonMethods(object):
     def push_fig(self, tag='frame', mode='lin'):
         """ """
         plt.savefig('%s/%s-%s-%s.png' % (self.hdf, self.name, tag, mode),
-                   bbox_inches='tight')
+                    bbox_inches='tight')
         plt.close()
 
 #==============================================================================
@@ -419,12 +419,12 @@ class ParseExperiment(CommonMethods):
             if os.path.exists(metafile):
                 times = self.get_times(metafile)
                 self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
-                             times])
+                                                        times])
             elif os.path.exists(sffile):
                 times = np.load(sffile)
                 times *= mm_to_fs
                 self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
-                             times])
+                                                        times])
             else:
                 self.times = np.linspace(time_dict['t start'],
                                          time_dict['t end'], time_dict['delta t'])
@@ -567,7 +567,7 @@ class ParseExperiment(CommonMethods):
 class ProcessExperiment(CommonMethods):
     """ """
     def __init__(self, date, seqNo=None, index=None, setup='tw',
-                 cpi = [0, 0, 0],
+                 cpi=[0, 0, 0],
                  center_dict={}, inv_dict={}):
 
         global header_keys, meta_keys, frame_keys
@@ -758,11 +758,11 @@ class ProcessExperiment(CommonMethods):
         dim = self.inv.dim
 
         methods = {'pBasex': (self.inv.invertPolBasex, [4, self.inv.lvals, dim], 
-                             [4, dim, dim]),
+                              [4, dim, dim]),
                    'MaxEnt': (self.inv.invertMaxEnt, [4, 4, dim], 
-                             [4, dim, dim]),
+                             [ 4, dim, dim]),
                    'Basex' : (self.inv.invertBasex, [1, 5, dim], 
-                             [1, dens, dens])
+                              [1, dens, dens])
                   }
 
         m = methods[self.inv_dict['inversion method']]
@@ -821,6 +821,7 @@ class ProcessExperiment(CommonMethods):
                 sb.tsplot(leg_mean[:,1], err_style=['unit_traces', 'ci_band'],
                           err_palette='YlOrRd_d', ax=axs[1])
                 self.push_fig(tag='dist', mode='ts')
+
             else:
                 f = plt.figure()
                 f.add_subplot(211)
