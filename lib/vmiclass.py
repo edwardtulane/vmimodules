@@ -26,6 +26,7 @@ from progressbar import ProgressBar
 import scipy.fftpack as fft
 import scipy.ndimage as ndimg
 import scipy.integrate as integ
+import scipy.ndimage as im
 import scipy.ndimage.interpolation as ndipol
 import scipy.optimize as opt
 import scipy.signal as sig
@@ -33,6 +34,7 @@ import scipy.signal as sig
 # import copy as cp
 #
 import proc as vmp
+import hitdetect as hd
 import inv as vminv
 from vis import Plotter
 import seaborn as sb
@@ -333,6 +335,7 @@ center_keys = ['centering method', 'fun(min)', 'opt disp alpha', 'opt disp x', '
 
 inv_keys = ['inversion method', 'l max', 'odd l', 'sigma', 'total basis set size', 'mask']
 
+singleshot_keys = ['comp_cntr', 'comp_strgth', 'no_levels']
 
 #==============================================================================
 
@@ -348,6 +351,19 @@ class CommonMethods(object):
         plt.savefig('%s/%s-%s-%s.png' % (self.hdf, self.name, tag, mode),
                     bbox_inches='tight')
         plt.close()
+
+    def get_times(self, path):
+
+        from StringIO import StringIO
+
+        for line in open(path):
+            if line.startswith('MBES_DELAY'):
+                    line = line.split('[')[-1]
+                    line = line.split(']')[0]
+                    time_string = line
+        time_string = time_string.replace(',', '.')
+        s = StringIO(time_string)
+        return np.loadtxt(s)
 
 #==============================================================================
 
@@ -477,19 +493,6 @@ class ParseExperiment(CommonMethods):
             header['delta t'] = (tmax - tmin) / np.float(self.length)
 
         return pd.Series(header)
-
-    def get_times(self, path):
-
-        from StringIO import StringIO
-
-        for line in open(path):
-            if line.startswith('MBES_DELAY'):
-                    line = line.split('[')[-1]
-                    line = line.split(']')[0]
-                    time_string = line
-        time_string = time_string.replace(',', '.')
-        s = StringIO(time_string)
-        return np.loadtxt(s)
 
     def get_props(self):
 
@@ -872,6 +875,252 @@ class ProcessExperiment(CommonMethods):
                     v = pd.Panel4D(getattr(self,k))
                     if hasattr(self, 'times'): v.labels = self.times
                     store.append(k, v)
+
+#==============================================================================
+#==============================================================================
+
+try:
+    from IPython.parallel import Client, interactive
+    cl = Client()
+    view = cl[:]
+
+    @view.parallel()
+    @interactive
+    def hitfind(img):
+        from vmimodules import detect_hits_img
+        sgl, mlt, ot, = detect_hits_img(img, comp_c, comp_s,
+                                        levels, i_max, dilate=True)
+        return sgl, mlt, ot
+
+    @view.parallel()
+    @interactive
+    def hitglob(img):
+        from vmimodules import detect_hits_img
+        hits = detect_hits_img(img, comp_c, comp_s, 
+                            levels, i_max, dilate=True, global_analysis=True)
+        return hits
+
+except:
+    view = None
+ 
+#==============================================================================
+
+class ParseSingleShots(CommonMethods):
+
+    def __init__(self, date, seqNo=None, inx=None, setup='fel', 
+                 meta_dict={}, singleshot_dict={}, time_dict={}):
+#       global header_keys, meta_keys, frame_keys, time_keys, mm_to_fs
+
+        vmi_dir = vmimodules.conf.vmi_dir
+        self.date, self.setup = pd.Timestamp(date), setup
+        self.access = pd.Timestamp(time.asctime())
+        self.seqNo, self.inx = seqNo, inx
+        
+        self.particle = meta_dict['particle'][:3]
+        self.comp_c, self.comp_s = singleshot_dict['comp_cntr'], singleshot_dict['comp_strgth']
+        self.no_levels = singleshot_dict['no_levels']
+
+        self.basedir = self.path = os.path.join(vmi_dir, setup, '-'.join((date, self.particle)))
+        self.hdf = os.path.join(vmi_dir, 'procd', setup, '-'.join((date, self.particle)))
+        self.cols = header_keys + meta_keys + frame_keys
+        
+        self.meta_dict = meta_dict
+
+        if self.seqNo is None:
+            if self.inx is None:
+                raise Exception("Hand over indices if the measurement is not a sequence")
+            self.kind = 'raw'
+            self.index = inx[0]
+            self.length = len(inx)
+            self.name = '-'.join((date, 'raw', '%02d' % self.index))
+
+            filelist = os.listdir(self.path)
+            raws = [l for l in filelist if getint(l) in inx]
+            regex = re.compile('raw.sss$')
+            raws = [l for l in raws 
+                    for m in [regex.search(l)] if m]
+            raws.sort(key=getint)
+            self.length = len(raws)
+
+            try:
+                assert self.length == len(raws)
+            except:    
+                print 'Some rawfiles must be missing'
+
+        else:
+            self.kind = 'seq'
+            seqdir = '-'.join((date, str(seqNo)))
+            self.path = os.path.join(self.path, seqdir)
+            self.name = '-'.join((date, 'seq', '%02d' % seqNo))
+
+            filelist = os.listdir(self.path)
+            regex = re.compile('raw.sss$')
+            raws = [l for l in filelist 
+                    for m in [regex.search(l)] if m]
+            raws.sort(key=getint)
+            self.length = len(raws)
+
+            metadir = self.basedir
+            metafile = os.path.join(metadir, '%s-%s.m' % (date, self.seqNo))
+
+            if os.path.exists(metafile):
+                self.times = self.get_times(metafile)
+#               self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
+#                                                       times])
+            self.cols += time_keys
+
+        hdf_dir = self.hdf
+        self.hdf = os.path.join(self.hdf, self.name)
+        if not os.path.exists(hdf_dir):
+            os.mkdir(hdf_dir)
+        if not os.path.exists(self.hdf):
+            os.mkdir(self.hdf)
+        self.inx = raws
+        self.status = 'raw'
+
+    def detect_hits(self):
+
+        if not hasattr(self, 'frames'):
+            self.read_data()
+  
+        maxpix = np.zeros_like(self.frames[0], dtype=np.float_)
+
+        for i in xrange(self.frames.shape[1]):
+            maxpix[:,i] = np.max(self.frames[:,i],  axis=0)
+
+        self.i_max = im.percentile_filter(maxpix, 95, (70,70))
+        
+        self.levels = np.linspace(0, 1, self.no_levels + 1)[:-1]
+
+        chc = np.random.choice(self.length * self.dimd, 100, replace=False)
+        glob_ana, locl_ana = list(), list()
+
+        if view is None:
+            pbar = ProgressBar().start()
+            pbar.maxval = 100
+
+            for i, img in enumerate(self.frames[chc]):
+                glob_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s,
+                                self.levels, self.i_max, dilate=True, global_analysis=True))
+                pbar.update(i)
+                
+        else:
+            view['comp_c'], view['comp_s'] = self.comp_c, self.comp_s
+            view['i_max'] = self.i_max
+            view['levels'] = self.levels
+
+            res=hitglob.map(self.frames[chc])
+            res.wait()
+            glob_ana = res.result
+            print 'Global analysis finished. Took %f.1 minutes.' % (res.wall_time / 60)
+
+        hitdist = pd.concat(glob_ana)
+
+        quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
+        self.levels = np.percentile(hitdist, 100 * quants)
+
+        if view is None:
+            print 'Starting hit detection in serial execution.'
+            pbar = ProgressBar().start()
+            pbar.maxval = self.length * self.dimd
+
+            for i, img in enumerate(self.frames):
+                locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, 
+                                self.levels, self.i_max, dilate=True))
+                pbar.update(i)
+
+        else:
+            print 'Starting hit detection in parallel mode running on %i cores.' % len(view)
+            view['levels'] = self.levels
+
+            res=hitfind.map(self.frames)
+            res.wait()
+            locl_ana = res.result
+            print 'Detection finished. Took %f.1 minutes.' % (res.wall_time / 60)
+
+        self.sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)})
+        self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)})
+        self.ot = pd.Series({i: r[2] for i,r in enumerate(locl_ana)}, name='otsu_thr')
+
+        del self.frames
+
+    def read_data(self):
+
+        if self.length > 1:
+            for i in xrange(self.length):
+                f = os.path.join(self.path, self.inx[i])
+                pid, ss_img = vmp.read_singleshots(f)
+
+                if not hasattr(self, 'frames'):
+                    self.dimd, dimy, dimx = ss_img.shape
+                    self.frames = np.zeros((self.length * self.dimd, dimy, dimx), dtype=ss_img.dtype)
+                    self.pid_ar = np.zeros((self.length * self.dimd), dtype=np.int_)
+                    print self.frames.shape
+
+                self.frames[i * self.dimd : (i+1) * self.dimd] = ss_img
+                self.pid_ar[i * self.dimd : (i+1) * self.dimd] = pid
+
+        else:
+            f = os.path.join(self.path, self.inx[i])
+            self.pid_ar, self.frames = vmp.read_singleshots(f)
+
+
+    def get_header(self):
+        
+        header = {}
+        for k in header_keys:
+            if hasattr(self, k):
+                header[k] = getattr(self, k)
+            else:
+                header[k] = None
+        header.update(self.meta_dict)
+
+        if hasattr(self, 'times'):
+            tmin, tmax = self.times.min(), self.times.max()
+            header['t start'] = tmin
+            header['t end'] = tmax
+            header['delta t'] = (tmax - tmin) / np.float(self.length)
+
+        return pd.Series(header)
+
+    def get_props(self):
+
+        with pd.HDFStore(vmimodules.conf.gmd_loc) as st:
+            gmd = st.joint_df[st.joint_df.isin(self.pid_ar)]
+
+        counts = pd.DataFrame({k: [v[(v.ls_rank == 5) & (v['mask'] == True)].x_gau.dropna().shape[0],
+                                   v.x_cntr.dropna().shape[0]] 
+                               for k,v in self.mlt.iteritems()},
+                               index=['count_gau', 'count_com']).T
+
+        return gmd, counts
+
+    def store(self):
+
+        with pd.HDFStore('%s.h5' % self.hdf) as store:
+            header = self.get_header()
+            gmd, counts = self.get_props()
+            counts = counts.join(self.ot)
+
+            if hasattr(self, 'times'):
+                long_times = np.repeat(self.times, self.dimd)
+                self.index = pd.MultiIndex.from_arrays([pid_ar, long_times])
+
+            else:
+                self.index = pid_ar
+
+            gmd.index, counts.index = self.index, self.index
+            self.sgl.items, self.mlt.items = self.index, self.index
+
+
+            store['header'] = header[self.cols]
+            store['gmd'] = gmd
+            store['counts'] = counts
+
+            store['mlt'] = mlt
+            store['sgl'] = sgl
+
+#==============================================================================
 
 def getint(name):
         basename = name.partition('.')[0]

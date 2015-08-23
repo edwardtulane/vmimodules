@@ -113,14 +113,14 @@ def detect_hits_patch(img, levels, struct):
     return hits
 
 
-def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
+def detect_hits_img(img, comp_cntr, comp_strgth, levels,
                     imax=0, dilate=True, global_analysis=False):
     """
     Outer peak finding loop for an entire VMI image.
 
     Parameters:
     cntr, strgth = Histogram compression
-    no_levels, imax = segmentation levels, dynamic range reference
+    levels, imax = segmentation levels, dynamic range reference
 
     Returns:
     hits_sgl, hits_mlt = Dataframes for single and multi-level
@@ -134,7 +134,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
     prop_cols = ['area', 'volume', 'y_gau', 'x_gau', 'y_sig', 'x_sig', 'qmax',
                  'discriminant', 'ls_rank', 'cond_no', 'ellip', 'resid']
 
-    levels = np.linspace(0,1, no_levels)
+#   levels = np.linspace(0,1, no_levels)
     levels = levels[::-1]
     struct = im.generate_binary_structure(2, 1)
 
@@ -163,6 +163,10 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
     if dilate:
         det_glob = im.binary_dilation(det_glob, structure=struct)
 
+    if global_analysis:
+        hitdist = img_wrk[det_glob]
+        return pd.Series(hitdist[hitdist > 0])
+
     lab_gl, cnt_gl = im.label(det_glob, structure=struct)
     obs_gl = sp.ndimage.find_objects(lab_gl, cnt_gl)
     
@@ -171,16 +175,6 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
     
     hits_mlt, prop_mlt = list(), list()
     prop_sgl = list()
-
-    if global_analysis:
-        hit_dist = list()
-
-        for (i, obj) in enumerate(obs_gl):
-            patch = img_wrk[obj]
-            ma = np.where(lab_gl[obj] == i + 1, True, False)
-            hit_dist.append(patch[ma])
-
-        return pd.Series([v for h in hit_dist for v in h if v > 0])
 
     for (i, obj) in enumerate(obs_gl):
         y_pos, x_pos = obj[0].start, obj[1].start
@@ -194,7 +188,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
         patch_strpd[~ma] = -1.
 
 
-        hits_lc = detect_hits_patch(patch_strpd, no_levels, struct)
+        hits_lc = detect_hits_patch(patch_strpd, levels, struct)
         prop_sgl.append( (x_wid, y_wid, len(hits_lc)) )
 
         for v in hits_lc:
@@ -253,6 +247,22 @@ def detect_hits_img(img, comp_cntr, comp_strgth, no_levels,
 
     return hits_sgl.join(patches), hits_mlt.join(mask), otsu_t
 
+#==============================================================================
+
+def map_hitcount(peaks, img, fac=1):
+    
+#     img = np.zeros((dim[0] * fac, dim[1] * fac))
+    
+    if hasattr(peaks, 'mask'):
+        peaks = peaks[peaks['mask']]
+        
+    cents = peaks[['y_gau','x_gau']].values * fac
+    cents = np.rint(cents.astype(np.float_)).astype(np.int_)
+    img[list(cents.T)] += 1
+#     assert img.sum() == cents.shape[0]
+    
+    return
+
 def gauss2d(pars, dim, norm=False, sig=1, qmax=1):
     y, x = np.arange(dim[0], dtype=np.float_), np.arange(dim[1], dtype=np.float_)
     yy, xx = np.meshgrid(y, x, indexing='ij')
@@ -275,4 +285,3 @@ def gauss2d(pars, dim, norm=False, sig=1, qmax=1):
     gss *= np.exp( x2)
 
     return gss * amp
-
