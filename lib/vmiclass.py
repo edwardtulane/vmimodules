@@ -1009,10 +1009,10 @@ class ParseSingleShots(CommonMethods):
             view['i_max'] = self.i_max
             view['levels'] = self.levels
 
-            res=hitglob.map(self.frames[chc])
+            res = hitglob.map(self.frames[chc])
             res.wait()
             glob_ana = res.result
-            print 'Global analysis finished. Took %f.1 minutes.' % (res.wall_time / 60)
+            print 'Global analysis finished. Took %.1f minutes.' % (res.wall_time / 60)
 
         hitdist = pd.concat(glob_ana)
 
@@ -1033,10 +1033,15 @@ class ParseSingleShots(CommonMethods):
             print 'Starting hit detection in parallel mode running on %i cores.' % len(view)
             view['levels'] = self.levels
 
-            res=hitfind.map(self.frames)
-            res.wait()
-            locl_ana = res.result
-            print 'Detection finished. Took %f.1 minutes.' % (res.wall_time / 60)
+            ind = np.arange(self.frames.shape[0])
+            no_chunks = len(ind) / 1200
+            chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
+
+            for chunk in chunks:
+                res = hitfind.map(self.frames[chunk])
+                res.wait()
+                locl_ana = locl_ana + res.result
+                print '%i images processed. Took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60))
 
         self.sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)})
         self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)})
@@ -1055,14 +1060,14 @@ class ParseSingleShots(CommonMethods):
                     self.dimd, dimy, dimx = ss_img.shape
                     self.frames = np.zeros((self.length * self.dimd, dimy, dimx), dtype=ss_img.dtype)
                     self.pid_ar = np.zeros((self.length * self.dimd), dtype=np.int_)
-                    print self.frames.shape
 
                 self.frames[i * self.dimd : (i+1) * self.dimd] = ss_img
                 self.pid_ar[i * self.dimd : (i+1) * self.dimd] = pid
 
         else:
-            f = os.path.join(self.path, self.inx[i])
+            f = os.path.join(self.path, self.inx[0])
             self.pid_ar, self.frames = vmp.read_singleshots(f)
+            self.dimd = self.frames.shape[0]
 
 
     def get_header(self):
@@ -1086,7 +1091,7 @@ class ParseSingleShots(CommonMethods):
     def get_props(self):
 
         with pd.HDFStore(vmimodules.conf.gmd_loc) as st:
-            gmd = st.joint_df[st.joint_df.isin(self.pid_ar)]
+            gmd = st.joint_df[st.joint_df.pulse_id.isin(self.pid_ar)]
 
         counts = pd.DataFrame({k: [v[(v.ls_rank == 5) & (v['mask'] == True)].x_gau.dropna().shape[0],
                                    v.x_cntr.dropna().shape[0]] 
@@ -1104,10 +1109,10 @@ class ParseSingleShots(CommonMethods):
 
             if hasattr(self, 'times'):
                 long_times = np.repeat(self.times, self.dimd)
-                self.index = pd.MultiIndex.from_arrays([pid_ar, long_times])
+                self.index = pd.MultiIndex.from_arrays([self.pid_ar, long_times])
 
             else:
-                self.index = pid_ar
+                self.index = self.pid_ar
 
             gmd.index, counts.index = self.index, self.index
             self.sgl.items, self.mlt.items = self.index, self.index
@@ -1117,8 +1122,8 @@ class ParseSingleShots(CommonMethods):
             store['gmd'] = gmd
             store['counts'] = counts
 
-            store['mlt'] = mlt
-            store['sgl'] = sgl
+            store['mlt'] = self.mlt
+            store['sgl'] = self.sgl
 
 #==============================================================================
 
