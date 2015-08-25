@@ -113,7 +113,7 @@ def detect_hits_patch(img, levels, struct):
     return hits
 
 
-def detect_hits_img(img, comp_cntr, comp_strgth, levels,
+def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
                     imax=0, dilate=True, global_analysis=False):
     """
     Outer peak finding loop for an entire VMI image.
@@ -147,8 +147,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels,
     if np.any(imax):
         assert img.shape == imax.shape
         
-        ma = np.zeros(img.shape, dtype=np.bool_)
-        ma = np.where(imax > np.percentile(imax, 10), True, False)
+        ma = imax > np.percentile(imax, 10)
         img_wrk[ma] = img_wrk[ma] / imax[ma]
         img_wrk[~ma] = 0.       
 
@@ -156,16 +155,22 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels,
         img_wrk /= img.max()
         
     img_cmp = comp_hist(img_wrk, comp_cntr, comp_strgth)
-    otsu_t = find_otsus_thr(img_cmp)
+
+    if thr is None:
+        otsu_t = find_otsus_thr(img_cmp)
+    else:
+        otsu_t = thr
     
-    det_glob = np.where(img_cmp > otsu_t, True, False)
+    det_glob = img_cmp > otsu_t
 
     if dilate:
         det_glob = im.binary_dilation(det_glob, structure=struct)
 
     if global_analysis:
         hitdist = img_wrk[det_glob]
-        return pd.Series(hitdist[hitdist > 0])
+        cmpdist = img_cmp.ravel()
+
+        return pd.Series(hitdist[hitdist > 0]), pd.Series(cmpdist)
 
     lab_gl, cnt_gl = im.label(det_glob, structure=struct)
     obs_gl = sp.ndimage.find_objects(lab_gl, cnt_gl)
@@ -184,7 +189,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels,
  
         patch = img_wrk[obj]
         patch_strpd = patch.copy()
-        ma = np.where(lab_gl[obj] == i + 1, True, False)
+        ma = (lab_gl[obj] == i + 1)
         patch_strpd[~ma] = -1.
 
 

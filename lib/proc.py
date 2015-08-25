@@ -49,6 +49,47 @@ def read_singleshots(fname):
         
     return ids, ss_arr
 
+class SingleShotExtractor():
+
+    def __init__(self, flist):
+
+        self.flist, self.file_id = flist, 0
+        self.arr = np.memmap(flist[self.file_id], dtype=np.int32, mode='r')
+        self.x_dim, self.y_dim, self.seqlen = self.arr[0:3]
+        self.slice_len = (self.x_dim * self.y_dim) / 4
+
+#       ids = np.zeros(seqlen, dtype=np.int32)
+        self.ss_arr = np.zeros((self.y_dim, self.x_dim), dtype=np.int8)
+
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+
+        if self.index == self.seqlen:
+            self.file_id += 1
+
+            if self.file_id  ==  len(self.flist):
+                raise StopIteration
+
+            self.arr = np.memmap(self.flist[self.file_id], dtype=np.int32, mode='r')
+            self.seqlen = self.arr[2]
+            self.index = 0
+
+        i, arr, sl_len = self.index, self.arr, self.slice_len
+        pid = arr[3 + i * (sl_len + 1)]
+        int8view = arr[3 + 1 + i * (sl_len + 1) 
+                       :3 + (i+1) * (sl_len + 1)].view(np.int8)
+        self.ss_arr[:,:] = int8view.reshape((self.y_dim, self.x_dim))
+
+        self.index += 1
+
+        return pid, self.ss_arr
+
+
+
 def centre_crop(M, cx, cy, crop=0):
     """
     Centre and crop image to a square

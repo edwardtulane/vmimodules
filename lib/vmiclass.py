@@ -888,16 +888,16 @@ try:
     @interactive
     def hitfind(img):
         from vmimodules import detect_hits_img
-        sgl, mlt, ot, = detect_hits_img(img, comp_c, comp_s,
-                                        levels, i_max, dilate=True)
+        sgl, mlt, ot, = detect_hits_img(img, comp_c, comp_s, levels=levels, thr=thr,
+                                        imax=i_max, dilate=True)
         return sgl, mlt, ot
 
     @view.parallel()
     @interactive
     def hitglob(img):
         from vmimodules import detect_hits_img
-        hits = detect_hits_img(img, comp_c, comp_s, 
-                            levels, i_max, dilate=True, global_analysis=True)
+        hits = detect_hits_img(img, comp_c, comp_s,
+                            levels=levels, imax=i_max, dilate=True, global_analysis=True)
         return hits
 
 except:
@@ -973,8 +973,8 @@ class ParseSingleShots(CommonMethods):
         self.hdf = os.path.join(self.hdf, self.name)
         if not os.path.exists(hdf_dir):
             os.mkdir(hdf_dir)
-        if not os.path.exists(self.hdf):
-            os.mkdir(self.hdf)
+#       if not os.path.exists(self.hdf):
+#           os.mkdir(self.hdf)
         self.inx = raws
         self.status = 'raw'
 
@@ -996,15 +996,19 @@ class ParseSingleShots(CommonMethods):
         glob_ana, locl_ana = list(), list()
 
         if view is None:
+            self.parallel = False
+
             pbar = ProgressBar().start()
             pbar.maxval = 100
 
             for i, img in enumerate(self.frames[chc]):
                 glob_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s,
-                                self.levels, self.i_max, dilate=True, global_analysis=True))
+                                levels=self.levels, imax=self.i_max, dilate=True, global_analysis=True))
                 pbar.update(i)
                 
         else:
+            self.parallel = True
+
             view['comp_c'], view['comp_s'] = self.comp_c, self.comp_s
             view['i_max'] = self.i_max
             view['levels'] = self.levels
@@ -1012,12 +1016,19 @@ class ParseSingleShots(CommonMethods):
             res = hitglob.map(self.frames[chc])
             res.wait()
             glob_ana = res.result
-            print 'Global analysis finished. Took %.1f minutes.' % (res.wall_time / 60)
+            print 'Global analysis finished. Took %i seconds.' % (res.wall_time)
 
-        hitdist = pd.concat(glob_ana)
+        hitdist = pd.concat([v[0] for v in glob_ana])
+        cmpdist = pd.concat([v[1] for v in glob_ana])
 
         quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
         self.levels = np.percentile(hitdist, 100 * quants)
+
+        self.thr = hd.find_otsus_thr(cmpdist)
+        print self.thr
+
+        del hitdist, cmpdist
+        cl.purge_results('all')
 
         if view is None:
             print 'Starting hit detection in serial execution.'
@@ -1025,27 +1036,39 @@ class ParseSingleShots(CommonMethods):
             pbar.maxval = self.length * self.dimd
 
             for i, img in enumerate(self.frames):
-                locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, 
-                                self.levels, self.i_max, dilate=True))
+                locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, thr=self.thr,
+                                levels=self.levels, imax=self.i_max, dilate=True))
                 pbar.update(i)
+
+            self.sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)}, dtype=np.float_)
+            self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)}, dtype=np.float_)
 
         else:
             print 'Starting hit detection in parallel mode running on %i cores.' % len(view)
             view['levels'] = self.levels
+            view['thr'] = self.thr
 
             ind = np.arange(self.frames.shape[0])
             no_chunks = len(ind) / 1200
             chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
-
-            for chunk in chunks:
+            
+            for i, chunk in enumerate(chunks):
                 res = hitfind.map(self.frames[chunk])
                 res.wait()
-                locl_ana = locl_ana + res.result
-                print '%i images processed. Took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60))
 
-        self.sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)})
-        self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)})
-        self.ot = pd.Series({i: r[2] for i,r in enumerate(locl_ana)}, name='otsu_thr')
+                locl_ana = res.result
+                sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)}, dtype=np.float_)
+                mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)}, dtype=np.float_)
+
+                sgl.items, mlt.items = self.pid_ar[chunk], self.pid_ar[chunk] 
+
+                with pd.HDFStore('%s-ss.h5' % self.hdf) as store:
+                    store['sgl%02d' % i] = sgl
+                    store['mlt%02d' % i] = mlt
+#                   print store.get('mlt%02d' % i ) 
+                
+                print '%i images processed. Last chunk took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60))
+                cl.purge_results('all')
 
         del self.frames
 
@@ -1090,40 +1113,52 @@ class ParseSingleShots(CommonMethods):
 
     def get_props(self):
 
-        with pd.HDFStore(vmimodules.conf.gmd_loc) as st:
-            gmd = st.joint_df[st.joint_df.pulse_id.isin(self.pid_ar)]
+#       with pd.HDFStore(vmimodules.conf.gmd_loc) as st:
+#           gmd = st.joint_df[st.joint_df.pulse_id.isin(self.pid_ar)]
 
         counts = pd.DataFrame({k: [v[(v.ls_rank == 5) & (v['mask'] == True)].x_gau.dropna().shape[0],
                                    v.x_cntr.dropna().shape[0]] 
                                for k,v in self.mlt.iteritems()},
                                index=['count_gau', 'count_com']).T
 
-        return gmd, counts
+        return counts
 
     def store(self):
 
-        with pd.HDFStore('%s.h5' % self.hdf) as store:
+        with pd.HDFStore('%s-ss.h5' % self.hdf) as store:
             header = self.get_header()
-            gmd, counts = self.get_props()
-            counts = counts.join(self.ot)
+#           counts = self.get_props()
+#           counts = counts.join(self.ot)
 
             if hasattr(self, 'times'):
                 long_times = np.repeat(self.times, self.dimd)
-                self.index = pd.MultiIndex.from_arrays([self.pid_ar, long_times])
+                index = pd.MultiIndex.from_arrays([self.pid_ar, long_times])
 
             else:
-                self.index = self.pid_ar
+                index = self.pid_ar
 
-            gmd.index, counts.index = self.index, self.index
-            self.sgl.items, self.mlt.items = self.index, self.index
+#           counts.index = self.index
 
+
+            if self.parallel:
+                mlt = pd.concat([store.get(k) for k in store.keys() 
+                                              if k.startswith('/mlt')])
+                sgl = pd.concat([store.get(k) for k in store.keys() 
+                                              if k.startswith('/sgl')])
+                [store.remove(k) for k in store.keys()]
+
+                store['mlt'] = mlt
+                store['sgl'] = sgl
+
+            else:
+                store['mlt'] = self.mlt
+                store['sgl'] = self.sgl
 
             store['header'] = header[self.cols]
-            store['gmd'] = gmd
-            store['counts'] = counts
+            store['imax'] = pd.DataFrame(self.i_max)
+#           store['counts'] = counts
 
-            store['mlt'] = self.mlt
-            store['sgl'] = self.sgl
+            store.sgl.items, store.mlt.items = index, index
 
 #==============================================================================
 
