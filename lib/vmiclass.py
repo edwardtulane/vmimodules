@@ -984,29 +984,21 @@ class ParseSingleShots(CommonMethods):
             self.read_data()
   
         maxpix = np.zeros_like(self.frames[0][1], dtype=np.float_)
-        ydim = maxpix.shape[0]
 
-        slc = np.zeros((len(self.frames), ydim))
         pbar = ProgressBar().start()
-        pbar.maxval = ydim
-        for i in xrange(ydim):
-            for j, img in enumerate(self.frames):
-                slc[j] = img[1][i]
-            maxpix[i] = np.max(slc,  axis=0)
+        pbar.maxval = self.dimd
+
+        for i in xrange(self.dimd):
+            np.max([maxpix, self.frames[i][1]], axis=0, out=maxpix)
             pbar.update(i)
+
         print 'Normalisation finished'
 
         self.i_max = im.percentile_filter(maxpix, 95, (70,70))
-
-        if not hasattr(self.singleshot_dict, 'rmax_imax'):
-            rmax = ydim / 2
-        else:
-            rmax = self.singleshot_dict['rmax_imax']
-
+        rmax = self.singleshot_dict['rmax_imax']
         self.i_max = vmp.crop_circle(self.i_max, rmax)
         
         self.levels = np.linspace(0, 1, self.no_levels + 1)[:-1]
-
         chc = np.random.choice(self.dimd, 100, replace=False)
         glob_ana, locl_ana = list(), list()
 
@@ -1064,7 +1056,7 @@ class ParseSingleShots(CommonMethods):
             view['thr'] = self.thr
 
             ind = np.arange(self.dimd)
-            no_chunks = len(ind) / 1200
+            no_chunks = self.dimd / 1200
             chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
             
             for i, chunk in enumerate(chunks):
