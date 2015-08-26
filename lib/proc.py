@@ -192,10 +192,10 @@ def crop_circle(frame, rmax):
     rad = frame.shape[0]
     XY = np.arange(rad,dtype='float64')
     R = np.sqrt((XY - cx) ** 2 + (XY - cy)[:, None] ** 2)
-    rim = frame[(R>rmax-2) & (R<rmax+2)]
-    frame -= np.mean(rim)
+#   rim = frame[(R>rmax-2) & (R<rmax+2)]
+#   frame -= np.mean(rim)
     frame[R > rmax] = 0.0
-    frame[frame < 0] = 0
+#   frame[frame < 0] = 0
     return frame
 
 def getintens(frame, cx, cy, rmax):
