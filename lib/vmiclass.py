@@ -1026,7 +1026,7 @@ class ParseSingleShots(CommonMethods):
             print 'Global analysis finished. Took %i seconds.' % (res.wall_time)
 
 #       hitdist = pd.concat([v[0] for v in glob_ana])
-        cmpdist = pd.concat([v[1] for v in res.result])
+        cmpdist = pd.concat(res.result)
 
 #       quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
 #       self.levels = np.percentile(hitdist, 100 * quants)

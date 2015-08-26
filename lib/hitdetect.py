@@ -156,6 +156,10 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
         
     img_cmp = comp_hist(img_wrk, comp_cntr, comp_strgth)
 
+    if global_analysis:
+        cmpdist = img_cmp.ravel()
+        return pd.Series(cmpdist)
+
     if thr is None:
         otsu_t = find_otsus_thr(img_cmp)
     else:
@@ -166,11 +170,6 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
     if dilate:
         det_glob = im.binary_dilation(det_glob, structure=struct)
 
-    if global_analysis:
-        hitdist = img_wrk[det_glob]
-        cmpdist = img_cmp.ravel()
-
-        return pd.Series(hitdist[hitdist > 0]), pd.Series(cmpdist)
 
     lab_gl, cnt_gl = im.label(det_glob, structure=struct)
     obs_gl = sp.ndimage.find_objects(lab_gl, cnt_gl)
