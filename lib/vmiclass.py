@@ -335,7 +335,7 @@ center_keys = ['centering method', 'fun(min)', 'opt disp alpha', 'opt disp x', '
 
 inv_keys = ['inversion method', 'l max', 'odd l', 'sigma', 'total basis set size', 'mask']
 
-singleshot_keys = ['comp_cntr', 'comp_strgth', 'no_levels']
+singleshot_keys = ['comp_cntr', 'comp_strgth', 'no_levels', 'rmax_imax']
 
 #==============================================================================
 
@@ -924,7 +924,7 @@ class ParseSingleShots(CommonMethods):
         self.hdf = os.path.join(vmi_dir, 'procd', setup, '-'.join((date, self.particle)))
         self.cols = header_keys + meta_keys + frame_keys
         
-        self.meta_dict = meta_dict
+        self.meta_dict, self.singleshot_dict = meta_dict, singleshot_dict
 
         if self.seqNo is None:
             if self.inx is None:
@@ -983,16 +983,31 @@ class ParseSingleShots(CommonMethods):
         if not hasattr(self, 'frames'):
             self.read_data()
   
-        maxpix = np.zeros_like(self.frames[0], dtype=np.float_)
+        maxpix = np.zeros_like(self.frames[0][1], dtype=np.float_)
+        ydim = maxpix.shape[0]
 
-        for i in xrange(self.frames.shape[1]):
-            maxpix[:,i] = np.max(self.frames[:,i],  axis=0)
+        slc = np.zeros((len(self.frames), ydim))
+        pbar = ProgressBar().start()
+        pbar.maxval = ydim
+        for i in xrange(ydim):
+            for j, img in enumerate(self.frames):
+                slc[j] = img[1][i]
+            maxpix[i] = np.max(slc,  axis=0)
+            pbar.update(i)
+        print 'Normalisation finished'
 
         self.i_max = im.percentile_filter(maxpix, 95, (70,70))
+
+        if not hasattr(self.singleshot_dict, 'rmax_imax'):
+            rmax = ydim / 2
+        else:
+            rmax = self.singleshot_dict['rmax_imax']
+
+        self.i_max = vmp.crop_circle(self.i_max, rmax)
         
         self.levels = np.linspace(0, 1, self.no_levels + 1)[:-1]
 
-        chc = np.random.choice(self.length * self.dimd, 100, replace=False)
+        chc = np.random.choice(self.dimd, 100, replace=False)
         glob_ana, locl_ana = list(), list()
 
         if view is None:
@@ -1013,27 +1028,27 @@ class ParseSingleShots(CommonMethods):
             view['i_max'] = self.i_max
             view['levels'] = self.levels
 
-            res = hitglob.map(self.frames[chc])
+            res = hitglob.map(self.frames[chc][1])
             res.wait()
-            glob_ana = res.result
+#           glob_ana = res.result
             print 'Global analysis finished. Took %i seconds.' % (res.wall_time)
 
-        hitdist = pd.concat([v[0] for v in glob_ana])
-        cmpdist = pd.concat([v[1] for v in glob_ana])
+#       hitdist = pd.concat([v[0] for v in glob_ana])
+        cmpdist = pd.concat([v[1] for v in res.result])
 
-        quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
-        self.levels = np.percentile(hitdist, 100 * quants)
+#       quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
+#       self.levels = np.percentile(hitdist, 100 * quants)
 
         self.thr = hd.find_otsus_thr(cmpdist)
-        print self.thr
+        print "Otsu's threshold used: ", self.thr
 
-        del hitdist, cmpdist
+#       del hitdist, cmpdist
         cl.purge_results('all')
 
         if view is None:
             print 'Starting hit detection in serial execution.'
             pbar = ProgressBar().start()
-            pbar.maxval = self.length * self.dimd
+            pbar.maxval = self.dimd
 
             for i, img in enumerate(self.frames):
                 locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, thr=self.thr,
@@ -1048,19 +1063,20 @@ class ParseSingleShots(CommonMethods):
             view['levels'] = self.levels
             view['thr'] = self.thr
 
-            ind = np.arange(self.frames.shape[0])
+            ind = np.arange(self.dimd)
             no_chunks = len(ind) / 1200
             chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
             
             for i, chunk in enumerate(chunks):
-                res = hitfind.map(self.frames[chunk])
+                id, ar = self.frames[chunk]
+                res = hitfind.map(ar)
                 res.wait()
 
-                locl_ana = res.result
-                sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)}, dtype=np.float_)
-                mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)}, dtype=np.float_)
+#               locl_ana = res.result
+                sgl = pd.Panel({i: r[0] for i,r in enumerate(res.result)}, dtype=np.float_)
+                mlt = pd.Panel({i: r[1] for i,r in enumerate(res.result)}, dtype=np.float_)
 
-                sgl.items, mlt.items = self.pid_ar[chunk], self.pid_ar[chunk] 
+                sgl.items, mlt.items = id, id 
 
                 with pd.HDFStore('%s-ss.h5' % self.hdf) as store:
                     store['sgl%02d' % i] = sgl
@@ -1070,27 +1086,30 @@ class ParseSingleShots(CommonMethods):
                 print '%i images processed. Last chunk took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60))
                 cl.purge_results('all')
 
-        del self.frames
+#       del self.frames
 
     def read_data(self):
 
-        if self.length > 1:
-            for i in xrange(self.length):
-                f = os.path.join(self.path, self.inx[i])
-                pid, ss_img = vmp.read_singleshots(f)
+        flist = [os.path.join(self.path, ix) for ix in self.inx]
+        self.frames = vmp.SingleShotExtractor(flist)
+        self.dimd = len(self.frames)
+#       if self.length > 1:
+#           for i in xrange(self.length):
+#               f = os.path.join(self.path, self.inx[i])
+#               pid, ss_img = vmp.read_singleshots(f)
 
-                if not hasattr(self, 'frames'):
-                    self.dimd, dimy, dimx = ss_img.shape
-                    self.frames = np.zeros((self.length * self.dimd, dimy, dimx), dtype=ss_img.dtype)
-                    self.pid_ar = np.zeros((self.length * self.dimd), dtype=np.int_)
+#               if not hasattr(self, 'frames'):
+#                   self.dimd, dimy, dimx = ss_img.shape
+#                   self.frames = np.zeros((self.length * self.dimd, dimy, dimx), dtype=ss_img.dtype)
+#                   self.pid_ar = np.zeros((self.length * self.dimd), dtype=np.int_)
 
-                self.frames[i * self.dimd : (i+1) * self.dimd] = ss_img
-                self.pid_ar[i * self.dimd : (i+1) * self.dimd] = pid
+#               self.frames[i * self.dimd : (i+1) * self.dimd] = ss_img
+#               self.pid_ar[i * self.dimd : (i+1) * self.dimd] = pid
 
-        else:
-            f = os.path.join(self.path, self.inx[0])
-            self.pid_ar, self.frames = vmp.read_singleshots(f)
-            self.dimd = self.frames.shape[0]
+#       else:
+#           f = os.path.join(self.path, self.inx[0])
+#           self.pid_ar, self.frames = vmp.read_singleshots(f)
+#           self.dimd = self.frames.shape[0]
 
 
     def get_header(self):
@@ -1130,13 +1149,6 @@ class ParseSingleShots(CommonMethods):
 #           counts = self.get_props()
 #           counts = counts.join(self.ot)
 
-            if hasattr(self, 'times'):
-                long_times = np.repeat(self.times, self.dimd)
-                index = pd.MultiIndex.from_arrays([self.pid_ar, long_times])
-
-            else:
-                index = self.pid_ar
-
 #           counts.index = self.index
 
 
@@ -1149,16 +1161,26 @@ class ParseSingleShots(CommonMethods):
 
                 store['mlt'] = mlt
                 store['sgl'] = sgl
+                self.pid_ar = mlt.items
 
             else:
                 store['mlt'] = self.mlt
                 store['sgl'] = self.sgl
+                self.pid_ar = self.mlt.items
 
             store['header'] = header[self.cols]
             store['imax'] = pd.DataFrame(self.i_max)
 #           store['counts'] = counts
 
+            if hasattr(self, 'times'):
+                long_times = np.repeat(self.times, self.dimd)
+                index = pd.MultiIndex.from_arrays([self.pid_ar, long_times])
+
+            else:
+                index = self.pid_ar
+
             store.sgl.items, store.mlt.items = index, index
+            cl.purge_everything()
 
 #==============================================================================
 

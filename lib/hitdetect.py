@@ -235,7 +235,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
     patches = pd.DataFrame(prop_sgl, columns=sgl_cols)
 
     # Distance matrix
-    di = sp.spatial.distance.pdist(hits_mlt.icol([4,5]))
+    di = sp.spatial.distance.pdist(hits_mlt[['x_gau', 'y_gau']])
     di_sq = sp.spatial.distance.squareform(di)
 
     unus = np.ones_like(di_sq, dtype=np.bool_)
@@ -247,10 +247,10 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
 
     neigh = np.ones_like(dups, dtype=np.bool_)
     neigh[sm[1]] = False
-    mask = neigh & ~dups
+    mask = neigh & ~dups & (hits_mlt.ls_rank == 5)
     mask.name = 'mask'
 
-    return hits_sgl.join(patches), hits_mlt.join(mask), otsu_t
+    return hits_sgl.join(patches), hits_mlt[mask], otsu_t #hits_mlt.join(mask), otsu_t
 
 #==============================================================================
 

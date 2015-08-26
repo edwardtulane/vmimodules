@@ -53,40 +53,92 @@ class SingleShotExtractor():
 
     def __init__(self, flist):
 
-        self.flist, self.file_id = flist, 0
-        self.arr = np.memmap(flist[self.file_id], dtype=np.int32, mode='r')
-        self.x_dim, self.y_dim, self.seqlen = self.arr[0:3]
-        self.slice_len = (self.x_dim * self.y_dim) / 4
+        file_count = len(flist)
+        self.arrs = list()
+        for f in flist:
+            self.arrs.append(np.memmap(f, dtype=np.int32, mode='r'))
+        self.xdim, self.ydim = np.zeros(file_count, dtype=np.int32), np.zeros(file_count, dtype=np.int32)
+        self.seqlen = np.zeros(file_count, dtype=np.int32)
+
+        for i, ar in enumerate(self.arrs):
+            self.xdim[i], self.ydim[i], self.seqlen[i] = ar[:3]
+
+        assert np.all(self.ydim[1:] ==  self.ydim[:-1])
+        assert np.all(self.xdim[1:] ==  self.xdim[:-1])
+
+        self.slice_len = (self.xdim[0] * self.ydim[0]) / 4
+        self.locs = np.repeat(np.arange(file_count), self.seqlen)
+        self.indx = np.array([list(range(l)) for l in self.seqlen]).ravel()
+
+        assert self.locs.shape == self.indx.shape
+
+
+
+#       self.flist, self.file_id = flist, 0
+#       self.arr = np.memmap(flist[self.file_id], dtype=np.int32, mode='r')
+#       self.x_dim, self.y_dim, self.seqlen = self.arr[0:3]
+#       self.slice_len = (self.x_dim * self.y_dim) / 4
 
 #       ids = np.zeros(seqlen, dtype=np.int32)
-        self.ss_arr = np.zeros((self.y_dim, self.x_dim), dtype=np.int8)
+#       self.ss_arr = np.zeros((self.y_dim, self.x_dim), dtype=np.int8)
 
-        self.index = 0
+#       self.index = 0
 
-    def __iter__(self):
-        return self
+    def __len__(self):
+        return np.sum(self.seqlen)
 
-    def next(self):
+    def get_frame(self, index):
+        ar_id = self.locs[index]
+        ix = self.indx[index]
+        ar = self.arrs[ar_id]
 
-        if self.index == self.seqlen:
-            self.file_id += 1
+        pid = ar[3 + ix * (self.slice_len + 1)]
+        int8view = ar[3 + 1 + ix * (self.slice_len + 1) 
+                     :3 + (ix + 1) * (self.slice_len + 1)].view(np.int8)
+        int8view.shape = (self.ydim[0], self.xdim[0])
 
-            if self.file_id  ==  len(self.flist):
-                raise StopIteration
+        return pid, int8view
 
-            self.arr = np.memmap(self.flist[self.file_id], dtype=np.int32, mode='r')
-            self.seqlen = self.arr[2]
-            self.index = 0
+    def __getitem__(self, index):
 
-        i, arr, sl_len = self.index, self.arr, self.slice_len
-        pid = arr[3 + i * (sl_len + 1)]
-        int8view = arr[3 + 1 + i * (sl_len + 1) 
-                       :3 + (i+1) * (sl_len + 1)].view(np.int8)
-        self.ss_arr[:,:] = int8view.reshape((self.y_dim, self.x_dim))
+        if isinstance(index, np.ndarray):
+            dim = len(index)
+            ids = np.zeros(dim, dtype=np.int32)
+            frames = np.zeros((dim, self.ydim[0], self.xdim[0]), dtype=np.int8)
 
-        self.index += 1
+            for i,ix in enumerate(index):
+                ids[i], frames[i] = self.get_frame(ix)
 
-        return pid, self.ss_arr
+            return ids, frames
+
+        else:
+            id, ar = self.get_frame(index)
+            ar.shape = (self.ydim[0], self.xdim[0])
+            return id, np.array(ar)
+#   def __iter__(self):
+#       return self
+
+#   def next(self):
+
+#       if self.index == self.seqlen:
+#           self.file_id += 1
+
+#           if self.file_id  ==  len(self.flist):
+#               raise StopIteration
+
+#           self.arr = np.memmap(self.flist[self.file_id], dtype=np.int32, mode='r')
+#           self.seqlen = self.arr[2]
+#           self.index = 0
+
+#       i, arr, sl_len = self.index, self.arr, self.slice_len
+#       pid = arr[3 + i * (sl_len + 1)]
+#       int8view = arr[3 + 1 + i * (sl_len + 1) 
+#                      :3 + (i+1) * (sl_len + 1)].view(np.int8)
+#       self.ss_arr[:,:] = int8view.reshape((self.y_dim, self.x_dim))
+
+#       self.index += 1
+
+#       return pid, self.ss_arr
 
 
 
