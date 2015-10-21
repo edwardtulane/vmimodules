@@ -268,6 +268,10 @@ def map_hitcount(peaks, img, fac=1):
     return
 
 def gauss2d(pars, dim, norm=False, sig=1, qmax=1):
+    """
+    Maps out gaussian peaks on an image. 
+    Superseded by the corresponding Cython routine.
+    """
     y, x = np.arange(dim[0], dtype=np.float_), np.arange(dim[1], dtype=np.float_)
     yy, xx = np.meshgrid(y, x, indexing='ij')
     gss = np.zeros_like(yy)

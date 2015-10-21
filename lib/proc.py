@@ -253,7 +253,7 @@ def Basex(IM,q1,q2, M, Mc, MTM, MTMc):
     """
     BASEX transformation with two regularization factors
     14-08-20: to be ported to the Inversion class and REVISITED
-    14-11-10: scheissegal
+    14-11-10: what a mess
     """
     NBF = min(np.shape(M))
     N = max(np.shape(M))
@@ -263,7 +263,7 @@ def Basex(IM,q1,q2, M, Mc, MTM, MTMc):
     sy = (sz[0]-1)/2
     zIM = np.mat(np.zeros([N,N]))
     zIM[cN-sy:cN+sy+1,cN-sx:cN+sx+1]=np.mat(IM)
-    Ci = sp.linalg.inv(MTMc+q2*np.eye(NBF,NBF))*Mc.T*zIM*M*sp.linalg.inv(MTM+q1*np.eye(NBF,NBF))
+    Ci = np.linalg.inv(MTMc+q2*np.eye(NBF,NBF))*Mc.T*zIM*M*np.linalg.inv(MTM+q1*np.eye(NBF,NBF))
     zIMr = np.dot(Mc,np.dot(Ci,Mc.T))
     ab = np.dot(Mc, Ci).dot(M.T)
     res = (zIM - ab)[cN-sy:cN+sy+1,cN-sx:cN+sx+1]

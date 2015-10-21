@@ -377,9 +377,15 @@ class ParseExperiment(CommonMethods):
         self.date, self.setup = pd.Timestamp(date), setup
         self.access = pd.Timestamp(time.asctime())
         self.seqNo, self.inx = seqNo, inx
+        self.particle = meta_dict['particle'][:3]
+
+        if setup == 'fel':
+            ext_date = '-'.join((date, self.particle))
+        else:
+            ext_date = date
         
-        self.basedir = self.path = os.path.join(vmi_dir, setup, date)
-        self.hdf = os.path.join(vmi_dir, 'procd', setup, date)
+        self.basedir = self.path = os.path.join(vmi_dir, setup, ext_date)
+        self.hdf = os.path.join(vmi_dir, 'procd', setup, ext_date)
         self.cols = header_keys + meta_keys + frame_keys
         
         self.pl = Plotter()
@@ -434,8 +440,8 @@ class ParseExperiment(CommonMethods):
             sffile = os.path.join(self.path, 'TgtPositions.npy')
             if os.path.exists(metafile):
                 times = self.get_times(metafile)
-                self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
-                                                        times])
+#               self.times = pd.MultiIndex.from_arrays([np.arange(self.length),
+#                                                       times])
             elif os.path.exists(sffile):
                 times = np.load(sffile)
                 times *= mm_to_fs
@@ -571,7 +577,7 @@ class ProcessExperiment(CommonMethods):
     """ """
     def __init__(self, date, seqNo=None, index=None, setup='tw',
                  cpi=[0, 0, 0],
-                 center_dict={}, inv_dict={}):
+                 center_dict={}, inv_dict={}, particle=None):
 
         global header_keys, meta_keys, frame_keys
         global center_keys, inv_keys
@@ -581,7 +587,14 @@ class ProcessExperiment(CommonMethods):
 
         self.access, self.cpi = pd.Timestamp(time.asctime()), cpi[:]
         self.seqNo, self.index = seqNo, index
-        self.hdf = os.path.join(vmi_dir, 'procd', setup, date)
+
+        if setup == 'fel' and particle:
+            particle = particle[:3]
+            ext_date = '-'.join((date, particle))
+        else:
+            ext_date = date
+        
+        self.hdf = os.path.join(vmi_dir, 'procd', setup, ext_date)
         self.cols = header_keys + meta_keys + frame_keys
 
         self.pl = Plotter()
@@ -931,7 +944,6 @@ class ParseSingleShots(CommonMethods):
                 raise Exception("Hand over indices if the measurement is not a sequence")
             self.kind = 'raw'
             self.index = inx[0]
-            self.length = len(inx)
             self.name = '-'.join((date, 'raw', '%02d' % self.index))
 
             filelist = os.listdir(self.path)
@@ -942,10 +954,6 @@ class ParseSingleShots(CommonMethods):
             raws.sort(key=getint)
             self.length = len(raws)
 
-            try:
-                assert self.length == len(raws)
-            except:    
-                print 'Some rawfiles must be missing'
 
         else:
             self.kind = 'seq'
@@ -1165,7 +1173,7 @@ class ParseSingleShots(CommonMethods):
 #           store['counts'] = counts
 
             if hasattr(self, 'times'):
-                long_times = np.repeat(self.times, self.dimd)
+                long_times = np.repeat(self.times, self.dimd / len(self.times))
                 index = pd.MultiIndex.from_arrays([self.pid_ar, long_times])
 
             else:

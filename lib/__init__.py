@@ -4,3 +4,4 @@ from inv import Inverter
 from vis import Plotter
 
 from hitdetect import detect_hits_img
+from hitC import gauss2dC, gaussquadC, pixC, quadC

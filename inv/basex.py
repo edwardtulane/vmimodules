@@ -6,7 +6,7 @@ Created on Fri Aug 22 01:27:08 2014
 """
 
 import numpy as np
-from scipy.special import factorial as fact
+from scipy.special import factorial as fact, gammaln
 # basex basis set
 
 def R_k(r, k, sigma):
@@ -45,7 +45,8 @@ def X(r, k, sigma):
 
 def gamma(ll):
 #    ll = np.arange(0, l + 1) ** 2
-    return (np.e / ll) ** ll * fact(ll)
+    lng = ll * (1 - np.log(ll)) + gammaln(ll)
+    return np.exp(lng) #(np.e / ll) ** ll * fact(ll)
 
 def gamma_approx(ll):
     coeffs = np.array([1, 1/12., 1/288., -139/51840., -571/2488320.])

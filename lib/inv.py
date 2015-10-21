@@ -23,14 +23,18 @@ class Inverter(object):
     """
     def __init__(self, r_max=250, n_even=16, dir=stor_dir, dryrun=0):
         self.__ext = '-'.join(('',  str(r_max), str(n_even))) #'-' + str(r_max)+'-'+str(n_even)
+
         if not dryrun:
             self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
             self.FtF = np.load(stor_dir + '/FtF' + self.__ext + '.npy')
             self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
             self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
                     self.__M2.T, self.__M2),
+
         self.bs = np.load(stor_dir + '/bs' + self.__ext + '.npy')
         self.rf = np.load(stor_dir + '/rf' + self.__ext + '.npy')
+        self.btb = self.bs.T.dot(self.bs)
+
         self.lvals = (n_even / 2) + 1
         self.n_funs = self.bs.shape[1] / self.lvals
         self.dim = r_max + 1
@@ -91,11 +95,15 @@ class Inverter(object):
         np.savetxt('tmp_arr' , arr)
 
         os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
+
+        if os.system('grep "Time" MaxAbel.log') >0:
+            raise Exception('Maximum Entropy reconstruction failed!')
+
         os.system('sed -e "s/D/e/g" -i MXLeg.dat')
         leg, invmap, res = (np.loadtxt('MXLeg.dat').T[1:], 
                             np.loadtxt('MXmap.dat', delimiter=','), 
                             np.loadtxt('MXsim.dat', delimiter=',')
-                        )
+                           )
         os.chdir(cur_path)
         return leg, invmap, arr - res
 
@@ -108,8 +116,12 @@ class Inverter(object):
 
     def invertPolBasex(self, arr, reg=1, get_pbsx=False):
             arr = arr.ravel()
-            pbsx = np.dot(sp.linalg.inv(self.FtF + reg * np.eye(self.FtF.shape[0])), 
-                   np.dot(self.ab, arr))
+#           pbsx = np.dot(np.linalg.inv(self.FtF + reg * np.eye(self.FtF.shape[0])), 
+#                  np.dot(self.ab, arr))
+            rhs = np.dot(self.ab, arr)
+            lhs = self.FtF + reg * np.eye(self.FtF.shape[0])
+            pbsx = np.linalg.solve(lhs, rhs)
+
             if get_pbsx:
                 return pbsx
 
@@ -121,24 +133,45 @@ class Inverter(object):
             res.shape = (self.dim, self.dim)
             return leg, inv_map, res
 
-    def get_raddist(self, arr):
-            from vmiclass import Frame
-            fr = Frame(arr)
-            fr.interpol()
-            polar = fr.eval_polar(self.dim)
-            polar = vmp.fold(polar, h=1)
+    def get_raddist_bs(self, arr):
+        arr = arr.ravel()
+        bta = self.bs.T.dot(arr.ravel())
+        dist = np.linalg.solve(self.btb, bta)
+        bta.shape = (-1, self.n_funs)
+        dist = np.dot(bta, self.rf.T)
+
+        return dist
+
+    def get_raddist(self, arr, radN, order=8):
+            from scipy.ndimage import interpolation as ndipol
+            import scipy.signal as sig
+
+            radius = arr.shape[0]
+            f = vmp.unfold(arr, v=1)
+            ck = sig.cspline2d(f, 0)
+
+            rr = np.linspace(0, radius, radN)
+            thth = np.linspace(0, np.pi, len(self.th))
+            pol_coord, rad_coord = np.meshgrid(thth, rr)
+            dx = np.pi / (len(self.th) - 1)
+            
+            x_coord = rad_coord * np.sin(pol_coord)
+            y_coord = rad_coord * np.cos(pol_coord) + radius
+
+            polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
+                                           output=np.float_)
 
             ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
-            leg = integ.romb(ang_prod, axis=1)
-            leg *= self.__dim2
-            leg = leg[:5]
+            leg = integ.romb(ang_prod, dx=dx, axis=1)
 
-            fac = (np.arange(9) * 2 + 1)
+            leg *= np.linspace(0, 1, radN) ** 2
+            leg = leg[:(order / 2 + 1)]
+
+            fac = (np.arange(order + 1) * 2 + 1)
             fac = fac[::2]
             leg = fac[:,None] * leg
 
             return leg
-
 #==============================================================================
 
     def pbsx2fold(self, pbsx):
