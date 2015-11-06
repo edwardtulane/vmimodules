@@ -293,3 +293,36 @@ def gauss2d(pars, dim, norm=False, sig=1, qmax=1):
     gss *= np.exp( x2)
 
     return gss * amp
+
+#==============================================================================
+
+def transform_hits(hits, xcntr, ycntr, phi):
+    """
+    Takes detected hits, centers and rotates them for plotting.
+
+    Parameters:
+    hits = Panel with singleshot coordinates 'x_gau' and 'y_gau'
+    xcntr, ycntr, phi = centre and rotation angle
+
+    Returns:
+    hitcopy = Panel with updated coordinates
+    """
+    x_gau = hits.minor_xs('x_gau')
+    y_gau = hits.minor_xs('y_gau')
+
+    phi = np.radians(phi)
+    cosp, sinp = np.cos(phi), np.sin(phi)
+
+    x_gau -= xcntr
+    y_gau -= ycntr
+
+    x_tf = cosp * x_gau - sinp * y_gau
+    y_tf = sinp * x_gau + cosp * y_gau
+    
+    hitcopy = hits.copy()
+    hitcopy.loc[:,:,'x_gau'] = x_tf
+    hitcopy.loc[:,:,'y_gau'] = y_tf    
+    
+    
+    return hitcopy
+

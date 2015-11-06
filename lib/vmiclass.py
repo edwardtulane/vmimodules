@@ -893,7 +893,7 @@ class ProcessExperiment(CommonMethods):
 #==============================================================================
 
 try:
-    from IPython.parallel import Client, interactive
+    from ipyparallel import Client, interactive
     cl = Client()
     view = cl[:]
 

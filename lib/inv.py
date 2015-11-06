@@ -142,7 +142,7 @@ class Inverter(object):
 
         return dist
 
-    def get_raddist(self, arr, radN, order=8):
+    def get_raddist(self, arr, radN, order=8, beta=False):
             from scipy.ndimage import interpolation as ndipol
             import scipy.signal as sig
 
@@ -161,6 +161,11 @@ class Inverter(object):
             polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
                                            output=np.float_)
 
+            if beta:
+                lo = polar ** 2 * np.sin(self.th)
+                up = lo * np.cos(self.th) ** 2
+                return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
+
             ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
             leg = integ.romb(ang_prod, dx=dx, axis=1)
 
@@ -172,6 +177,26 @@ class Inverter(object):
             leg = fac[:,None] * leg
 
             return leg
+
+    def invertImage(self, img,  radN, order=8):
+
+        legq = np.zeros([4, order / 2 + 1, radN])
+
+        qu = vmp.quadrants(img)
+        arrq = np.zeros_like(qu)
+        resq = arrq.copy()
+
+        for i in xrange(4):
+            q = qu[i]
+            _, arr, res = self.invertMaxEnt(q)
+            arrq[i], resq[i] = arr, res
+            legq[i] = self.get_raddist(arr, radN, order)
+
+        arrs = vmp.compose(arrq)
+        ress = vmp.compose(resq)
+
+        return legq, arrs, ress
+
 #==============================================================================
 
     def pbsx2fold(self, pbsx):
@@ -227,11 +252,11 @@ if __name__ == '__main__':
     r = vmp.unfold(r_qu, 1,1)
     inv = Inverter(250, 16)
 
-    i1 = inv.invertBasex(r)
+#   i1 = inv.invertBasex(r)
     i2 = inv.invertMaxEnt(r_qu)
     i3 = inv.invertPolBasex(r_qu)
 
-    plt.plot(i1[0].T)
+#   plt.plot(i1[0].T)
     plt.figure()
     plt.plot(i2[0].T)
     plt.show()
