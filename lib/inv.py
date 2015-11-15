@@ -162,7 +162,7 @@ class Inverter(object):
                                            output=np.float_)
 
             if beta:
-                lo = polar ** 2 * np.sin(self.th)
+                lo = polar * np.sin(self.th) # polar **2 ?
                 up = lo * np.cos(self.th) ** 2
                 return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
 
