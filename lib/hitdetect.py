@@ -4,7 +4,7 @@
 # In[1]:
 
 import numpy as np, scipy as sp
-import pandas as pd, seaborn as sb
+import pandas as pd
 import scipy.ndimage as im
 
 

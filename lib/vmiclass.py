@@ -37,7 +37,7 @@ import proc as vmp
 import hitdetect as hd
 import inv as vminv
 from vis import Plotter
-import seaborn as sb
+import seaborn.apionly as sb
 sb.set_context('talk')
 #import matplotlib.gridspec as gridspec
 #from matplotlib.widgets import Slider, Button, RadioButtons

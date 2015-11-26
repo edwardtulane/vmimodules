@@ -89,9 +89,17 @@ class Inverter(object):
 #==============================================================================
 
     def invertMaxEnt(self, arr, T=0, P=2):
+        import shutil as sh
         arr_path = os.path.join(mod_home, 'inv')
         cur_path = os.path.abspath(os.curdir)
-        os.chdir(arr_path)
+        tmp_path = os.path.join('/tmp', '%i' % os.getpid())
+
+        if not os.path.exists(tmp_path):
+            os.mkdir(tmp_path)
+
+        os.chdir(tmp_path)
+        sh.copy(os.path.join(arr_path, 'MEVIR.elf'), tmp_path)
+
         np.savetxt('tmp_arr' , arr)
 
         os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
@@ -107,6 +115,33 @@ class Inverter(object):
         os.chdir(cur_path)
         return leg, invmap, arr - res
 
+    def invertMaxLeg(self, arr, T=0, P=2):
+        import shutil as sh
+        arr_path = os.path.join(mod_home, 'inv')
+        cur_path = os.path.abspath(os.curdir)
+        tmp_path = os.path.join('/tmp', '%i' % os.getpid())
+
+        if not os.path.exists(tmp_path):
+            os.mkdir(tmp_path)
+
+        os.chdir(tmp_path)
+        sh.copy(os.path.join(arr_path, "Meveler2beta.elf"), tmp_path)
+
+        np.savetxt('tmp_arr', arr, fmt='%i')
+
+        os.system('./Meveler2beta.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
+
+        if os.system('grep "Time" Meveler.log') >0:
+            raise Exception('Maximum Entropy reconstruction failed!')
+
+        os.system('sed -e "s/D/e/g" -i MEXdis.dat')
+        leg, invmap, res = (np.loadtxt('MEXdis.dat').T[1:], 
+                            np.loadtxt('MEXmap.dat', delimiter=','), 
+                            np.loadtxt('MEXsim.dat', delimiter=',')
+                           )
+        os.chdir(cur_path)
+        return leg, invmap, arr - res
+
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
                             self.__MTM1, self.__MTM2)
@@ -115,23 +150,23 @@ class Inverter(object):
         return leg_p, bsx, res
 
     def invertPolBasex(self, arr, reg=1, get_pbsx=False):
-            arr = arr.ravel()
+        arr = arr.ravel()
 #           pbsx = np.dot(np.linalg.inv(self.FtF + reg * np.eye(self.FtF.shape[0])), 
 #                  np.dot(self.ab, arr))
-            rhs = np.dot(self.ab, arr)
-            lhs = self.FtF + reg * np.eye(self.FtF.shape[0])
-            pbsx = np.linalg.solve(lhs, rhs)
+        rhs = np.dot(self.ab, arr)
+        lhs = self.FtF + reg * np.eye(self.FtF.shape[0])
+        pbsx = np.linalg.solve(lhs, rhs)
 
-            if get_pbsx:
-                return pbsx
+        if get_pbsx:
+            return pbsx
 
-            leg = self.pbsx2rad(pbsx)
-            leg *= self.__dim2
-            pbsx = pbsx.ravel()
-            inv_map = self.pbsx2fold(pbsx)
-            res = arr - self.pbsx2ab(pbsx).ravel()
-            res.shape = (self.dim, self.dim)
-            return leg, inv_map, res
+        leg = self.pbsx2rad(pbsx)
+        leg *= self.__dim2
+        pbsx = pbsx.ravel()
+        inv_map = self.pbsx2fold(pbsx)
+        res = arr - self.pbsx2ab(pbsx).ravel()
+        res.shape = (self.dim, self.dim)
+        return leg, inv_map, res
 
     def get_raddist_bs(self, arr):
         arr = arr.ravel()
@@ -143,40 +178,40 @@ class Inverter(object):
         return dist
 
     def get_raddist(self, arr, radN, order=8, beta=False):
-            from scipy.ndimage import interpolation as ndipol
-            import scipy.signal as sig
+        from scipy.ndimage import interpolation as ndipol
+        import scipy.signal as sig
 
-            radius = arr.shape[0]
-            f = vmp.unfold(arr, v=1)
-            ck = sig.cspline2d(f, 0)
+        radius = arr.shape[0]
+        f = vmp.unfold(arr, v=1)
+        ck = sig.cspline2d(f, 0)
 
-            rr = np.linspace(0, radius, radN)
-            thth = np.linspace(0, np.pi, len(self.th))
-            pol_coord, rad_coord = np.meshgrid(thth, rr)
-            dx = np.pi / (len(self.th) - 1)
-            
-            x_coord = rad_coord * np.sin(pol_coord)
-            y_coord = rad_coord * np.cos(pol_coord) + radius
+        rr = np.linspace(0, radius, radN)
+        thth = np.linspace(0, np.pi, len(self.th))
+        pol_coord, rad_coord = np.meshgrid(thth, rr)
+        dx = np.pi / (len(self.th) - 1)
+        
+        x_coord = rad_coord * np.sin(pol_coord) - 0.5
+        y_coord = rad_coord * np.cos(pol_coord) + radius -0.5
 
-            polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
-                                           output=np.float_)
+        polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
+                                       output=np.float_)
 
-            if beta:
-                lo = polar * np.sin(self.th) # polar **2 ?
-                up = lo * np.cos(self.th) ** 2
-                return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
+        if beta:
+            lo = polar * np.sin(self.th) # polar **2 ?
+            up = lo * np.cos(self.th) ** 2
+            return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
 
-            ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
-            leg = integ.romb(ang_prod, dx=dx, axis=1)
+        ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
+        leg = integ.romb(ang_prod, dx=dx, axis=1)
 
-            leg *= np.linspace(0, 1, radN) ** 2
-            leg = leg[:(order / 2 + 1)]
+        leg *= np.linspace(0, 1, radN) ** 2
+        leg = leg[:(order / 2 + 1)]
 
-            fac = (np.arange(order + 1) * 2 + 1)
-            fac = fac[::2]
-            leg = fac[:,None] * leg
+        fac = (np.arange(order + 1) * 2 + 1)
+        fac = fac[::2]
+        leg = fac[:,None] * leg
 
-            return leg
+        return leg
 
     def invertImage(self, img,  radN, order=8):
 

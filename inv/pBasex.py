@@ -50,7 +50,7 @@ def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
     r_basis = np.zeros([n_funs, rad + 1, (rad * blowup) + 1])
     r_funs = np.zeros([n_funs, (rad * blowup)  + 1])
 
-    Rn = np.arange(n_funs + 1)
+    Rn = np.arange(n_funs + 1, dtype=np.float_)
     Rn *= sig
     Rn = Rn[:, None, None]
 
@@ -171,17 +171,34 @@ def AbelInt(f):
             int[i, x], err[i,x] = integrate.quad(integrand, x, r[-1], args = x)
     return int, err
 
+def project_polar(img, r_max, sigma):
+    from scipy.ndimage import interpolation as ndipol
+    import scipy.signal as sig
 
+    ck = sig.cspline2d(img, 0)
+
+    rr = np.linspace(0, r_max, r_max + 1)
+    thth = np.linspace(0, np.pi / 2, 257)
+    pol_coord, rad_coord = np.meshgrid(thth, rr)
+    dx = np.pi / (257 - 1)
+    
+    x_coord = rad_coord * np.sin(pol_coord) #- 0.5
+    y_coord = rad_coord * np.cos(pol_coord) #- 0.5
+
+    polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
+                                   output=np.float_)
+
+    return polar
 
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 400
-    sigma = 1.00
-    n_even = 32
+    r_max = 50
+    sigma = 2.00
+    n_even = 6
     n_odd = 0
 
-    blowup = 8
+    blowup = 2
 
     store_path = os.path.join(sys.path[0], 'storage')
     ext = '-' + str(r_max)+'-'+str(n_even)
@@ -189,11 +206,17 @@ if __name__ == '__main__':
     r_bas, ang_bas, r_funs = gen_bas(r_max, sigma, n_even, n_odd, blowup, cos2=False)
     bs = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], r_bas.shape[2]))
     ab = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], r_bas.shape[2]))
+    ab_p = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], 257))
+
     for l in xrange(ang_bas.shape[0]):
         tmp_bs = r_bas * ang_bas[l]
         tmp_bs = np.reshape(tmp_bs, (-1, r_bas.shape[2], r_bas.shape[3]))
         bs[l] = tmp_bs[:,:,::blowup]
         ab[l] = AbelVec(tmp_bs)[:,:,::blowup] / np.float(blowup)
+        
+        for m, img in enumerate(ab[l]):
+            ab_p[l,m] = project_polar(img, r_max, sigma)
+
         print '\n Transformed l = %d' % (2*l)
 
     np.save(store_path + '/bs' + ext, bs.reshape(bs.shape[0] * bs.shape[1], bs.shape[2] ** 2).T)

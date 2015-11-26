@@ -281,11 +281,15 @@ def gen_rect(diam, dens, disp):
     """
     Generate a square grid of given diameter and density,
     whose centre is shifted by the displacement vector
+    2015-11-26: corrected for bspline displacement of [0.5, 0.5]
     """
     spc1D = np.linspace(0, diam, dens)
+#   spc1Dx = spc1D - disp[1]
+#   spc1Dy = spc1D - disp[0]
     x_coord, y_coord = np.meshgrid(spc1D, spc1D)
 
-    return [y_coord + disp[1], x_coord + disp[0]]
+    #return [y_coord + disp[1], x_coord + disp[0]]
+    return [y_coord - disp[1] - 0.5 , x_coord - disp[0] - 0.5]
 
 
 def gen_polar(radius, radN, polN, disp):
@@ -293,10 +297,10 @@ def gen_polar(radius, radN, polN, disp):
     Generate a polar grid of given radius and density in both radius and angles
     14-08-20: Approved
     """
-    radii = np.linspace(0, radius, radN)
+    radii = np.linspace(-0.5, radius - 0.5, radN)
     angles = np.linspace(0, 2*np.pi, polN)
     pol_coord, rad_coord = np.meshgrid(angles, radii)
-    x_coord = rad_coord * np.sin(pol_coord) + radius
+    x_coord = rad_coord * np.sin(pol_coord) + radius 
     y_coord = rad_coord * np.cos(pol_coord) + radius
 
     return [y_coord + disp[1], x_coord + disp[0]]
