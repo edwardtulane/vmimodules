@@ -134,10 +134,12 @@ class Frame(np.ndarray):
 
     def interpol(self, smooth=0.0):
         """ Cubic spline interpolation with zero smoothing """
-        self.__ck = sig.cspline2d(self, smooth)
+        self.ck = sig.cspline2d(self, smooth)
 
     def __rotateframe(self, phi=0):
-        """ Rotate the coefficient matrix in degs, cutting off the corners """
+        """ Rotate the coefficient matrix in degs, cutting off the corners 
+            2015-12-09: This routine introduces an undesired offset! 
+            DO NOT USE """
         if not phi:
             self.ck = self.__ck
         else:
@@ -146,16 +148,16 @@ class Frame(np.ndarray):
 
     def eval_rect(self, density=global_dens, displace=[0., 0.], phi=0):
         """ Project the image onto a rectangular grid with given spacing """
-        self.__rotateframe(self.offset + self.disp[0] +  phi)
-        coords = vmp.gen_rect(self.diam, density, self.disp[1:] + displace)
+        coords = vmp.gen_rect(self.diam, density, self.disp[1:] + displace, 
+                              phi = self.offset + self.disp[0] + phi)
         rect = ndipol.map_coordinates(self.ck, coords, prefilter=False,
                                       output=np.float_)
         return RectImg(rect)
 
     def eval_polar(self, radN=251, polN=1025):
         """ Project the image onto a polar grid with radial and polar denss."""
-        self.__rotateframe(self.offset + self.disp[0])
-        coords = vmp.gen_polar(self.rad_sq, radN, polN, self.disp[1:])
+        coords = vmp.gen_polar(self.rad_sq, radN, polN, self.disp[1:],
+                              phi = self.offset + self.disp[0])
         polar = ndipol.map_coordinates(self.ck, coords, prefilter=False)
         return PolarImg(polar)
 
@@ -186,18 +188,16 @@ class Frame(np.ndarray):
 
     def __eval_sym(self, delta):
         """ Returns the total imaginary part of the 2D FFT of self.rect """
-        delta[0] = 0.0
         rect_in = self.eval_rect(global_dens, delta[1:], phi=delta[0])
         ft = fft.fft2(rect_in)
         return abs(ft.imag).sum()
 
     def __eval_sym2(self, delta):
         """ Use Bordas' criterion. I found it to be inferior """
-        delta[0] = 0.0
         rect_in = self.eval_rect(global_dens, delta[1:], phi=delta[0])
 #       rect_in = self.rect.copy()
-        Tstar = np.flipud(np.fliplr(rect_in))
-        return -1 * np.sum(rect_in * Tstar)
+        Tstar = rect_in * rect_in[::-1, ::-1]
+        return -1 * np.sum(Tstar)
 
     def __eval_sym3(self, delta, inv, dens):
         rect_in = self.eval_rect(dens,  delta[1:], phi=delta[0])
@@ -221,7 +221,7 @@ class Frame(np.ndarray):
         if not ang:
             domain[0] = 0.0
         self.res = opt.minimize(self.__eval_sym3, init_vec, args=(inv, dens),
-                                method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
+                                method='Nelder-Mead', # method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
             print 'Writing angular offset and optimised centre: %r' % (self.res.x)
@@ -240,14 +240,13 @@ class Frame(np.ndarray):
         if not ang:
             domain[0] = 0.0
         self.res = opt.minimize(meth_d[method], init_vec,
-                                method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
+                                method='Nelder-Mead', #method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
             print 'Writing optimized centre and angular offset'
             self.disp += self.res.x
         # Final evaluation
-        self.__rotateframe(self.offset + self.disp[0])
-        self.eval_rect(global_dens)
+        #self.eval_rect(global_dens)
 
 #===============================================================================
 

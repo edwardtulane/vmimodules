@@ -14,9 +14,8 @@ TODO: deliberately delete commented blocks
 
 import numpy as np
 import scipy as sp
-import pylab as pl
 
-import copy as cp
+import math
 
 def rawread(filename):
     """
@@ -277,33 +276,51 @@ def Basex(IM,q1,q2, M, Mc, MTM, MTMc):
 ###
 
 
-def gen_rect(diam, dens, disp):
+def gen_rect(diam, dens, disp, phi=0):
     """
     Generate a square grid of given diameter and density,
     whose centre is shifted by the displacement vector
     2015-11-26: corrected for bspline displacement of [0.5, 0.5]
+    2015-12-09: included rotation and omitted displacement, which was caused by
+                ndimage.rotate
     """
+
+    r0 = diam / 2.
     spc1D = np.linspace(0, diam, dens)
-#   spc1Dx = spc1D - disp[1]
-#   spc1Dy = spc1D - disp[0]
+
     x_coord, y_coord = np.meshgrid(spc1D, spc1D)
+    
+    x_coord -= r0 #+ disp[0]
+    y_coord -= r0 #+ disp[1]
+    
+    cosphi = math.cos(math.radians(phi))
+    sinphi = math.sin(math.radians(phi))
+    
+    y_rot = cosphi * y_coord - sinphi * x_coord
+    x_rot = sinphi * y_coord + cosphi * x_coord
+    
+    x_rot += r0 - disp[0]
+    y_rot += r0 - disp[1]
 
     #return [y_coord + disp[1], x_coord + disp[0]]
-    return [y_coord - disp[1] - 0.5 , x_coord - disp[0] - 0.5]
+    return [y_rot, x_rot]
 
-
-def gen_polar(radius, radN, polN, disp):
+def gen_polar(radius, radN, polN, disp, phi=0):
     """
     Generate a polar grid of given radius and density in both radius and angles
     14-08-20: Approved
+    2015-12-09: included rotation and omitted displacement, which was caused by
+                ndimage.rotate
     """
-    radii = np.linspace(-0.5, radius - 0.5, radN)
+
+    radii = np.linspace(0, radius, radN)
     angles = np.linspace(0, 2*np.pi, polN)
+    angles += math.radians(phi)
     pol_coord, rad_coord = np.meshgrid(angles, radii)
     x_coord = rad_coord * np.sin(pol_coord) + radius 
     y_coord = rad_coord * np.cos(pol_coord) + radius
 
-    return [y_coord + disp[1], x_coord + disp[0]]
+    return [y_coord - disp[1], x_coord - disp[0]]
 
 def gen_qrs_grid(radius, radN, polN, disp):
     """
@@ -380,7 +397,7 @@ def fold(img_in, v=False, h=False):
     return slc
 
 def unfold(img_in, v=False, h=False):
-    img = cp.deepcopy(img_in)
+    img = img_in.copy()
     cntr_v, cntr_h = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
     if not (v or h):
         raise ValueError('Where shall I unfold? (v, h) = bool')
@@ -394,14 +411,13 @@ def unfold(img_in, v=False, h=False):
     return img
 
 def quadrants(img_in):
-    img = cp.deepcopy(img_in)
+    img = img_in.copy()
     cntr_h, cntr_v = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
     q1, q2 = img[cntr_h:,cntr_v:], img[cntr_h:,cntr_v::-1]
     q3, q4 = img[cntr_h::-1,cntr_v::-1], img[cntr_h::-1,cntr_v:]
     return np.asarray([q1, q2, q3, q4])
 
-def compose(quads):
-    qu = cp.deepcopy(quads)
+def compose(qu):
     cmps = np.zeros((np.asarray(qu[0].shape) * 2 - 1))
     cntr = qu[0].shape[0] - 1
     cmps[cntr:, cntr:], cmps[cntr:,cntr::-1] = qu[0],  qu[1]
@@ -409,7 +425,7 @@ def compose(quads):
     return cmps
 
 def halves(img_in):
-    img = cp.deepcopy(img_in)
+    img = img_in.copy()
     cntr_h, cntr_v = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
     h1 = img[:,cntr_v:]
     h2 = img[:,cntr_v::-1]
