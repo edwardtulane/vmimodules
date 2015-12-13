@@ -190,8 +190,8 @@ class Inverter(object):
         pol_coord, rad_coord = np.meshgrid(thth, rr)
         dx = np.pi / (len(self.th) - 1)
         
-        x_coord = rad_coord * np.sin(pol_coord) - 0.5
-        y_coord = rad_coord * np.cos(pol_coord) + radius -0.5
+        x_coord = rad_coord * np.sin(pol_coord)
+        y_coord = rad_coord * np.cos(pol_coord) + radius
 
         polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
                                        output=np.float_)

@@ -193,9 +193,9 @@ def project_polar(img, r_max, sigma):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 50
+    r_max = 75
     sigma = 2.00
-    n_even = 6
+    n_even = 8
     n_odd = 0
 
     blowup = 2

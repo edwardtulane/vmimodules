@@ -376,7 +376,7 @@ def resolve_path(homedir, date, seqNr, setup, mode):
         return path
 
 def fold(img_in, v=False, h=False):
-    img = cp.deepcopy(img_in)
+    img = img_in.copy()
     cntr_v, cntr_h = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
     if not (v or h):
         raise ValueError('Where shall I fold? (v, h) = bool')
