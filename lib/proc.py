@@ -322,18 +322,19 @@ def gen_polar(radius, radN, polN, disp, phi=0):
 
     return [y_coord - disp[1], x_coord - disp[0]]
 
-def gen_qrs_grid(radius, radN, polN, disp):
+def gen_qrs_grid(radius, radN, polN, alpha):
     """
-    Generate a polar grid of given radius and density in both radius and angles
-    14-08-20: Approved
+    Generate a polar grid of displaced rescattering circles.
     """
-    radii = np.linspace(0, radius, radN)
+    radii = np.linspace(-1.26, +1.26, radN)
+    radii = np.abs(radii)
+    offs = np.linspace(-1, +1, radN)
     angles = np.linspace(0, 2*np.pi, polN)
     pol_coord, rad_coord = np.meshgrid(angles, radii)
-    x_coord = rad_coord * np.sin(pol_coord) + radius
-    y_coord = rad_coord * np.cos(pol_coord) + radius
+    x_coord = rad_coord * np.sin(pol_coord)
+    y_coord = rad_coord * np.cos(pol_coord) + offs
 
-    return [y_coord + disp[1], x_coord + disp[0]]
+    return [y_coord * alpha + radius, x_coord * alpha + radius]
 
 def plot_circles(axes, x_cntr, y_cntr, fro=5, to=120, Ncirc=7):
     """
