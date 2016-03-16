@@ -16,6 +16,8 @@ import numpy as np
 import scipy as sp
 
 import math
+import scipy.signal as sig
+import scipy.ndimage.interpolation as ndipol
 
 def rawread(filename):
     """
@@ -336,6 +338,7 @@ def gen_qrs_grid(radius, radN, polN, alpha):
 
     return [y_coord * alpha + radius, x_coord * alpha + radius]
 
+
 def plot_circles(axes, x_cntr, y_cntr, fro=5, to=120, Ncirc=7):
     """
     Draw red, equidistant circles into the plot 'axes'
@@ -431,6 +434,35 @@ def halves(img_in):
     h1 = img[:,cntr_v:]
     h2 = img[:,cntr_v::-1]
     return np.asarray([h1, h2])
+
+def map_quadrant_polar(qu, radN=251, polN=257, smooth=0.0):
+
+    # make a single quadrant iterable
+    if len(qu.shape) == 2:
+        qu = [qu]
+        pol = np.zeros([radN, polN])
+        pol = [qu]
+    else:
+        pol = np.zeros([qu.shape[0], radN, polN])
+
+    radius = qu[0].shape[0]
+    radii = np.linspace(0, radius, radN)
+    angles = np.linspace(0, 0.5*np.pi, polN)
+
+    pol_coord, rad_coord = np.meshgrid(angles, radii)
+    x_coord = rad_coord * np.sin(pol_coord)
+    y_coord = rad_coord * np.cos(pol_coord)
+
+    coords = [y_coord, x_coord]
+
+    for i, q in enumerate(qu):
+       ck = sig.cspline2d(q, smooth) 
+       pol[i] = ndipol.map_coordinates(ck, coords, prefilter=False)
+
+    if len(qu.shape) == 2:
+        return pol[0]
+    else:
+        return pol
 
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#

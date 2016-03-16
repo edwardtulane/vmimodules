@@ -177,41 +177,54 @@ class Inverter(object):
 
         return dist
 
-    def get_raddist(self, arr, radN, order=8, beta=False):
-        from scipy.ndimage import interpolation as ndipol
-        import scipy.signal as sig
+#    def get_raddist(self, arr, radN, order=8, beta=False):
+#        from scipy.ndimage import interpolation as ndipol
+#        import scipy.signal as sig
+#
+#        radius = arr.shape[0]
+#        f = vmp.unfold(arr, v=1)
+#        ck = sig.cspline2d(f, 0)
+#
+#        rr = np.linspace(0, radius, radN)
+#        thth = np.linspace(0, np.pi, len(self.th))
+#        pol_coord, rad_coord = np.meshgrid(thth, rr)
+#        dx = np.pi / (len(self.th) - 1)
+#        
+#        x_coord = rad_coord * np.sin(pol_coord)
+#        y_coord = rad_coord * np.cos(pol_coord) + radius
+#
+#        polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
+#                                       output=np.float_)
+#
+#        if beta:
+#            lo = polar * np.sin(self.th) # polar **2 ?
+#            up = lo * np.cos(self.th) ** 2
+#            return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
+#
+#        ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
+#        leg = integ.romb(ang_prod, dx=dx, axis=1)
+#
+#        leg *= np.linspace(0, 1, radN) ** 2
+#        leg = leg[:(order / 2 + 1)]
+#
+#        fac = (np.arange(order + 1) * 2 + 1)
+#        fac = fac[::2]
+#        leg = fac[:,None] * leg
+#
+#        return leg
 
-        radius = arr.shape[0]
-        f = vmp.unfold(arr, v=1)
-        ck = sig.cspline2d(f, 0)
+    def get_raddist(self, qu, radN, polN=257, order=8):
+        pol = vmp.map_quadrant_polar(arr, radN)
 
-        rr = np.linspace(0, radius, radN)
-        thth = np.linspace(0, np.pi, len(self.th))
-        pol_coord, rad_coord = np.meshgrid(thth, rr)
-        dx = np.pi / (len(self.th) - 1)
-        
-        x_coord = rad_coord * np.sin(pol_coord)
-        y_coord = rad_coord * np.cos(pol_coord) + radius
+        th = np.linspace(0, 0.5*np.pi, polN)
+        rad2 = np.arange(251)**2
+        kern = pol * np.sin(th) * rad2[:,None]
+        dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
 
-        polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
-                                       output=np.float_)
+        legvan = np.polynomial.legendre.legvander(np.cos(th), order)
+        x, res, rank, cond = np.linalg.lstsq(legvan[:,::2], pol.T)
 
-        if beta:
-            lo = polar * np.sin(self.th) # polar **2 ?
-            up = lo * np.cos(self.th) ** 2
-            return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
-
-        ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
-        leg = integ.romb(ang_prod, dx=dx, axis=1)
-
-        leg *= np.linspace(0, 1, radN) ** 2
-        leg = leg[:(order / 2 + 1)]
-
-        fac = (np.arange(order + 1) * 2 + 1)
-        fac = fac[::2]
-        leg = fac[:,None] * leg
-
-        return leg
+        return x * rad2[:,None]
 
     def invertImage(self, img,  radN, order=8):
 

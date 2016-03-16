@@ -199,28 +199,27 @@ class Frame(np.ndarray):
         Tstar = rect_in * rect_in[::-1, ::-1]
         return -1 * np.sum(Tstar)
 
-    def __eval_sym3(self, delta, inv, dens):
-        rect_in = self.eval_rect(dens,  delta[1:], phi=delta[0])
-        quads = vmp.quadrants(rect_in)
-        pb = np.zeros((4, inv.FtF.shape[0]))
-        for k, img in enumerate(quads):
-            pb[k] = inv.invertPolBasex(img, get_pbsx=True)
-        pb /= bn.nansum(pb[:,:inv.n_funs], axis=1)[:,None]
-        dev = bn.nansum(bn.nanstd(pb[:,:inv.n_funs*2], axis=0))
-        return dev
-
+    def __eval_sym3(self, delta, inv, dens, rad):
+        img = self.eval_rect(dens, delta[1:], phi=delta[0])
+        img = vmp.crop_circle(img, rad)
+        qu = vmp.quadrants(img)
+        rad = np.zeros_like(qu)
+        for j,q in enumerate(qu):
+            rad[j] = inv.get_raddist(q, rad, order=2)[0]#[250:290]
+            rad[j] /= rad[j].sum()    
+        return -1 * rad.prod(0).max()
 
     def centre_pbsx(self, cntr=True, ang=False, dens=501):
         """ Brute Force centering with the pBasex method """
         init_vec = [0, 0, 0]
         rad = (dens - 1) / 2
-        inv = vminv.Inverter(rad, 8)
+        inv = vminv.Inverter(rad, 8, dryrun=True)
         domain = np.tile([-15, 15], 3).reshape(3, 2)
         if not cntr:
             domain[1:] = 0.0
         if not ang:
             domain[0] = 0.0
-        self.res = opt.minimize(self.__eval_sym3, init_vec, args=(inv, dens),
+        self.res = opt.minimize(self.__eval_sym3, init_vec, args=(inv, dens, rad),
                                 method='Nelder-Mead', # method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
@@ -546,6 +545,7 @@ class ParseExperiment(CommonMethods):
                 frames.items = self.times
 
             store['frames'] = frames
+#           store.append('frames', frames)
 
             fr_mean = bn.nanmean(self.frames, 0)
             with sb.axes_style('white'):
