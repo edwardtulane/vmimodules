@@ -146,7 +146,7 @@ class Inverter(object):
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
                             self.__MTM1, self.__MTM2)
-        leg_p = vmp.get_raddist(bsx)
+        leg_p = vmp.get_raddist(bsx, arr.shape[0])
 #       leg_p = leg_p * self.__dim2[None,:]
         return leg_p, bsx, res
 
