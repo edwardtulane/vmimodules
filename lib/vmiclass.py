@@ -199,33 +199,28 @@ class Frame(np.ndarray):
         Tstar = rect_in * rect_in[::-1, ::-1]
         return -1 * np.sum(Tstar)
 
-    def __eval_sym3(self, delta, inv, dens, rad):
-        img = self.eval_rect(dens, delta[1:], phi=delta[0])
-        img = vmp.crop_circle(img, rad)
+    def __eval_sym3(self, delta, dens, radN):
+        img = self.eval_rect(dens, delta, phi=0
+                            )#delta[0])
+        img = vmp.crop_circle(img, radN)
         qu = vmp.quadrants(img)
         rad = np.zeros_like(qu)
         for j,q in enumerate(qu):
-            rad[j] = inv.get_raddist(q, rad, order=2)[0]#[250:290]
+            rad[j] = vmp.get_raddist(q, radN+1, order=2)[0]#[250:290]
             rad[j] /= rad[j].sum()    
         return -1 * rad.prod(0).max()
 
-    def centre_pbsx(self, cntr=True, ang=False, dens=501):
+    def centre_pbsx(self, dens=501):
         """ Brute Force centering with the pBasex method """
-        init_vec = [0, 0, 0]
-        rad = (dens - 1) / 2
-        inv = vminv.Inverter(rad, 8, dryrun=True)
-        domain = np.tile([-15, 15], 3).reshape(3, 2)
-        if not cntr:
-            domain[1:] = 0.0
-        if not ang:
-            domain[0] = 0.0
-        self.res = opt.minimize(self.__eval_sym3, init_vec, args=(inv, dens, rad),
+        init_vec = [0, 0]
+        radN = (dens - 1) / 2
+#       inv = vminv.Inverter(radN, 8, dryrun=True)
+        self.res = opt.minimize(self.__eval_sym3, init_vec, args=(dens, radN),
                                 method='Nelder-Mead', # method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
             print 'Writing angular offset and optimised centre: %r' % (self.res.x)
-            self.disp += self.res.x
-        del inv
+            self.disp[1:] += self.res.x
 
     def find_centre(self, method=2, cntr=True, ang=True):
         """ Iterate 'eval_sym' with a bound BFGS alg. verbosely ('disp') 

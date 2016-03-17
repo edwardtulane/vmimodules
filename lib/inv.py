@@ -21,23 +21,24 @@ class Inverter(object):
     """
     Docstring
     """
-    def __init__(self, r_max=250, n_even=16, dir=stor_dir, dryrun=0):
+    def __init__(self, r_max=250, n_even=8, dir=stor_dir, dryrun=0):
         self.__ext = '-'.join(('',  str(r_max), str(n_even))) #'-' + str(r_max)+'-'+str(n_even)
 
         if not dryrun:
             self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
+            self.bs = np.load(stor_dir + '/bs' + self.__ext + '.npy')
+            self.rf = np.load(stor_dir + '/rf' + self.__ext + '.npy')
+#           self.btb = self.bs.T.dot(self.bs)
             self.FtF = np.load(stor_dir + '/FtF' + self.__ext + '.npy')
             self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
             self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
                     self.__M2.T, self.__M2),
 
-        self.bs = np.load(stor_dir + '/bs' + self.__ext + '.npy')
-        self.rf = np.load(stor_dir + '/rf' + self.__ext + '.npy')
-        self.btb = self.bs.T.dot(self.bs)
 
         self.lvals = (n_even / 2) + 1
         self.n_funs = self.bs.shape[1] / self.lvals
         self.dim = r_max + 1
+        self.polN = self.ab.shape[1] / self.dim
         self.__dim2 = np.linspace(0, 1, self.dim) ** 2
         self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
@@ -145,7 +146,7 @@ class Inverter(object):
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
                             self.__MTM1, self.__MTM2)
-        leg_p = self.get_raddist(bsx)
+        leg_p = vmp.get_raddist(bsx)
 #       leg_p = leg_p * self.__dim2[None,:]
         return leg_p, bsx, res
 
@@ -165,7 +166,7 @@ class Inverter(object):
         pbsx = pbsx.ravel()
         inv_map = self.pbsx2fold(pbsx)
         res = arr - self.pbsx2ab(pbsx).ravel()
-        res.shape = (self.dim, self.dim)
+        res.shape = (self.dim, self.polN)
         return leg, inv_map, res
 
     def get_raddist_bs(self, arr):
@@ -213,19 +214,6 @@ class Inverter(object):
 #
 #        return leg
 
-    def get_raddist(self, qu, radN, polN=257, order=8):
-        pol = vmp.map_quadrant_polar(arr, radN)
-
-        th = np.linspace(0, 0.5*np.pi, polN)
-        rad2 = np.arange(251)**2
-        kern = pol * np.sin(th) * rad2[:,None]
-        dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
-
-        legvan = np.polynomial.legendre.legvander(np.cos(th), order)
-        x, res, rank, cond = np.linalg.lstsq(legvan[:,::2], pol.T)
-
-        return x * rad2[:,None]
-
     def invertImage(self, img,  radN, order=8):
 
         legq = np.zeros([4, order / 2 + 1, radN])
@@ -254,7 +242,7 @@ class Inverter(object):
 
     def pbsx2ab(self, pbsx):
             fold = np.dot(pbsx, self.ab)
-            fold.shape = (self.dim, self.dim)
+            fold.shape = (self.dim, self.polN)
             return fold
 
     def pbsx2rad(self, pbsx):

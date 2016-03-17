@@ -18,6 +18,7 @@ import scipy as sp
 import math
 import scipy.signal as sig
 import scipy.ndimage.interpolation as ndipol
+import matplotlib.pyplot as pl
 
 def rawread(filename):
     """
@@ -328,15 +329,15 @@ def gen_qrs_grid(radius, radN, polN, alpha):
     """
     Generate a polar grid of displaced rescattering circles.
     """
-    radii = np.linspace(-1.26, +1.26, radN)
-    radii = np.abs(radii)
+    radii = -np.linspace(-1.26, +1.26, radN)
+#   radii = np.abs(radii)
     offs = np.linspace(-1, +1, radN)
     angles = np.linspace(0, 2*np.pi, polN)
     pol_coord, rad_coord = np.meshgrid(angles, radii)
     x_coord = rad_coord * np.sin(pol_coord)
-    y_coord = rad_coord * np.cos(pol_coord) + offs
+    y_coord = rad_coord * np.cos(pol_coord) + offs[:, None]
 
-    return [y_coord * alpha + radius, x_coord * alpha + radius]
+    return [radii, y_coord * alpha + radius, x_coord * alpha + radius]
 
 
 def plot_circles(axes, x_cntr, y_cntr, fro=5, to=120, Ncirc=7):
@@ -445,7 +446,7 @@ def map_quadrant_polar(qu, radN=251, polN=257, smooth=0.0):
     else:
         pol = np.zeros([qu.shape[0], radN, polN])
 
-    radius = qu[0].shape[0]
+    radius = qu[0].shape[0] - 1
     radii = np.linspace(0, radius, radN)
     angles = np.linspace(0, 0.5*np.pi, polN)
 
@@ -459,10 +460,23 @@ def map_quadrant_polar(qu, radN=251, polN=257, smooth=0.0):
        ck = sig.cspline2d(q, smooth) 
        pol[i] = ndipol.map_coordinates(ck, coords, prefilter=False)
 
-    if len(qu.shape) == 2:
+    if isinstance(qu, list):
         return pol[0]
     else:
         return pol
+
+def get_raddist(qu, radN, polN=257, order=8):
+    pol = map_quadrant_polar(qu, radN)
+
+    th = np.linspace(0, 0.5*np.pi, polN)
+    rad2 = np.arange(radN)**2
+    kern = pol * np.sin(th) * rad2[:,None]
+#   dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
+
+    legvan = np.polynomial.legendre.legvander(np.cos(th), order)
+    x, res, rank, cond = np.linalg.lstsq(legvan[:,::2], pol.T)
+
+    return x * rad2[None,:]
 
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
