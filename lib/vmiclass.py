@@ -122,7 +122,7 @@ class Frame(np.ndarray):
         self.rad_sq = np.min([dx, dy])
         self.diam = size[0]
         self.offset = offs
-        self.disp = [0.0, 0.0, 0.0]
+        self.disp = np.array([0.0, 0.0, 0.0])
 
 #       if do_intpol:
 #           self.interpol(self)
@@ -204,7 +204,7 @@ class Frame(np.ndarray):
                             )#delta[0])
         img = vmp.crop_circle(img, radN)
         qu = vmp.quadrants(img)
-        rad = np.zeros_like(qu)
+        rad = np.zeros([4, radN+1])
         for j,q in enumerate(qu):
             rad[j] = vmp.get_raddist(q, radN+1, order=2)[0]#[250:290]
             rad[j] /= rad[j].sum()    
@@ -1194,6 +1194,7 @@ if __name__ == '__main__':
     r = f.eval_rect()
 #   bsx = r.pBasex()
 #   fold = vminv.pbsx2fold(bsx)
+
 #   inv = vmp.unfold(fold, 1,1)
 #   logplot(inv)
 #    a = r.view(Frame)

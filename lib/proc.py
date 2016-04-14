@@ -288,8 +288,8 @@ def gen_rect(diam, dens, disp, phi=0):
                 ndimage.rotate
     """
 
-    r0 = diam / 2.
-    spc1D = np.linspace(0, diam, dens)
+    r0 = (diam - 1) / 2.
+    spc1D = np.linspace(0, diam - 1, dens)
 
     x_coord, y_coord = np.meshgrid(spc1D, spc1D)
     
@@ -424,9 +424,10 @@ def quadrants(img_in):
 
 def compose(qu):
     cmps = np.zeros((np.asarray(qu[0].shape) * 2 - 1))
-    cntr = qu[0].shape[0] - 1
-    cmps[cntr:, cntr:], cmps[cntr:,cntr::-1] = qu[0],  qu[1]
-    cmps[cntr::-1,cntr::-1], cmps[cntr::-1,cntr:] = qu[2], qu[3]
+    cntry = qu[0].shape[0] - 1
+    cntrx = qu[0].shape[1] - 1
+    cmps[cntry:, cntrx:], cmps[cntry:,cntrx::-1] = qu[0],  qu[1]
+    cmps[cntry::-1,cntrx::-1], cmps[cntry::-1,cntrx:] = qu[2], qu[3]
     return cmps
 
 def halves(img_in):
