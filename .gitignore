@@ -6,3 +6,7 @@
 
 **/*~
 **/.*
+
+inv/tmp_arr
+**/*.log
+build
