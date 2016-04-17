@@ -132,7 +132,7 @@ def AbelTrans(f):
     N = np.float(f.shape[1])
     Phi, Gam = prop_vec(N, lam, h)
 
-    for i in xrange(int(N)):
+    for i in range(int(N)):
         g[:,i] = np.dot(C, x)
 #       Phi, Gam = propag(N, i, lam, h)
         x =  np.dot(Phi[:,:,i], x) + Gam[:,:,i] * f[:,i]
@@ -148,7 +148,7 @@ def AbelVec(f):
     N = np.float(f.shape[2])
     Phi, Gam = prop_vec(N, lam, h)
 
-    for i in xrange(int(N)):
+    for i in range(int(N)):
         g[:,:,i] = np.dot(C, x)
         x =  np.swapaxes(np.dot(Phi[:,:,i], x), 0, 1) + Gam[None,:,:,i] * f[:,None,:,i]
         print('.', end='')
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     ab = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], r_bas.shape[2]))
     ab_p = np.zeros((ang_bas.shape[0], r_bas.shape[1], r_bas.shape[2], 257))
 
-    for l in xrange(ang_bas.shape[0]):
+    for l in range(ang_bas.shape[0]):
         tmp_bs = r_bas * ang_bas[l]
         tmp_bs = np.reshape(tmp_bs, (-1, r_bas.shape[2], r_bas.shape[3]))
         bs[l] = tmp_bs[:,:,::blowup]

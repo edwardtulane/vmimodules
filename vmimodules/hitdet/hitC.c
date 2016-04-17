@@ -1835,7 +1835,7 @@ static const char __pyx_k_itemsize_0_for_cython_array[] = "itemsize <= 0 for cyt
 static const char __pyx_k_ndarray_is_not_C_contiguous[] = "ndarray is not C contiguous";
 static const char __pyx_k_unable_to_allocate_array_data[] = "unable to allocate array data.";
 static const char __pyx_k_strided_and_direct_or_indirect[] = "<strided and direct or indirect>";
-static const char __pyx_k_home_felix_program_vmimodules_v[] = "/home/felix/program/vmimodules/vmimodules/hitdet/hitC.pyx";
+static const char __pyx_k_home_brausse_program_vmimodules[] = "/home/brausse/program/vmimodules/vmimodules/hitdet/hitC.pyx";
 static const char __pyx_k_unknown_dtype_code_in_numpy_pxd[] = "unknown dtype code in numpy.pxd (%d)";
 static const char __pyx_k_Buffer_view_does_not_expose_stri[] = "Buffer view does not expose strides";
 static const char __pyx_k_Can_only_create_a_buffer_that_is[] = "Can only create a buffer that is contiguous in memory.";
@@ -1897,7 +1897,7 @@ static PyObject *__pyx_n_s_gauss2dC;
 static PyObject *__pyx_n_s_gaussquadC;
 static PyObject *__pyx_kp_s_got_differing_extents_in_dimensi;
 static PyObject *__pyx_n_s_gss;
-static PyObject *__pyx_kp_s_home_felix_program_vmimodules_v;
+static PyObject *__pyx_kp_s_home_brausse_program_vmimodules;
 static PyObject *__pyx_n_s_i;
 static PyObject *__pyx_n_s_id;
 static PyObject *__pyx_n_s_img;
@@ -18516,7 +18516,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_gaussquadC, __pyx_k_gaussquadC, sizeof(__pyx_k_gaussquadC), 0, 0, 1, 1},
   {&__pyx_kp_s_got_differing_extents_in_dimensi, __pyx_k_got_differing_extents_in_dimensi, sizeof(__pyx_k_got_differing_extents_in_dimensi), 0, 0, 1, 0},
   {&__pyx_n_s_gss, __pyx_k_gss, sizeof(__pyx_k_gss), 0, 0, 1, 1},
-  {&__pyx_kp_s_home_felix_program_vmimodules_v, __pyx_k_home_felix_program_vmimodules_v, sizeof(__pyx_k_home_felix_program_vmimodules_v), 0, 0, 1, 0},
+  {&__pyx_kp_s_home_brausse_program_vmimodules, __pyx_k_home_brausse_program_vmimodules, sizeof(__pyx_k_home_brausse_program_vmimodules), 0, 0, 1, 0},
   {&__pyx_n_s_i, __pyx_k_i, sizeof(__pyx_k_i), 0, 0, 1, 1},
   {&__pyx_n_s_id, __pyx_k_id, sizeof(__pyx_k_id), 0, 0, 1, 1},
   {&__pyx_n_s_img, __pyx_k_img, sizeof(__pyx_k_img), 0, 0, 1, 1},
@@ -18827,7 +18827,7 @@ static int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__20 = PyTuple_Pack(26, __pyx_n_s_pars, __pyx_n_s_dim, __pyx_n_s_norm, __pyx_n_s_sig, __pyx_n_s_i, __pyx_n_s_j, __pyx_n_s_jj, __pyx_n_s_ystart, __pyx_n_s_ystop, __pyx_n_s_yrng, __pyx_n_s_xstart, __pyx_n_s_xstop, __pyx_n_s_xrng, __pyx_n_s_inc, __pyx_n_s_qmax, __pyx_n_s_cntr, __pyx_n_s_x, __pyx_n_s_y, __pyx_n_s_xci, __pyx_n_s_yci, __pyx_n_s_xc, __pyx_n_s_yc, __pyx_n_s_peakno, __pyx_n_s_xvec, __pyx_n_s_yvec, __pyx_n_s_img); if (unlikely(!__pyx_tuple__20)) __PYX_ERR(0, 19, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__20);
   __Pyx_GIVEREF(__pyx_tuple__20);
-  __pyx_codeobj__21 = (PyObject*)__Pyx_PyCode_New(4, 0, 26, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__20, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_felix_program_vmimodules_v, __pyx_n_s_gauss2dC, 19, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__21)) __PYX_ERR(0, 19, __pyx_L1_error)
+  __pyx_codeobj__21 = (PyObject*)__Pyx_PyCode_New(4, 0, 26, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__20, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_brausse_program_vmimodules, __pyx_n_s_gauss2dC, 19, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__21)) __PYX_ERR(0, 19, __pyx_L1_error)
 
   /* "vmimodules/vmimodules/hitdet/hitC.pyx":87
  * @cython.boundscheck(False)
@@ -18839,7 +18839,7 @@ static int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__22 = PyTuple_Pack(25, __pyx_n_s_pars, __pyx_n_s_dim, __pyx_n_s_sig, __pyx_n_s_i, __pyx_n_s_j, __pyx_n_s_jj, __pyx_n_s_ystart, __pyx_n_s_ystop, __pyx_n_s_yrng, __pyx_n_s_xstart, __pyx_n_s_xstop, __pyx_n_s_xrng, __pyx_n_s_inc, __pyx_n_s_qmax, __pyx_n_s_cntr, __pyx_n_s_x, __pyx_n_s_y, __pyx_n_s_xci, __pyx_n_s_yci, __pyx_n_s_xc, __pyx_n_s_yc, __pyx_n_s_peakno, __pyx_n_s_xvec, __pyx_n_s_yvec, __pyx_n_s_img); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(0, 87, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__22);
   __Pyx_GIVEREF(__pyx_tuple__22);
-  __pyx_codeobj__23 = (PyObject*)__Pyx_PyCode_New(3, 0, 25, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_felix_program_vmimodules_v, __pyx_n_s_gaussquadC, 87, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__23)) __PYX_ERR(0, 87, __pyx_L1_error)
+  __pyx_codeobj__23 = (PyObject*)__Pyx_PyCode_New(3, 0, 25, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_brausse_program_vmimodules, __pyx_n_s_gaussquadC, 87, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__23)) __PYX_ERR(0, 87, __pyx_L1_error)
 
   /* "vmimodules/vmimodules/hitdet/hitC.pyx":154
  * @cython.boundscheck(False)
@@ -18851,7 +18851,7 @@ static int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__24 = PyTuple_Pack(10, __pyx_n_s_pars, __pyx_n_s_dim, __pyx_n_s_gss, __pyx_n_s_cntr, __pyx_n_s_yc, __pyx_n_s_xc, __pyx_n_s_length, __pyx_n_s_i, __pyx_n_s_y, __pyx_n_s_x); if (unlikely(!__pyx_tuple__24)) __PYX_ERR(0, 154, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__24);
   __Pyx_GIVEREF(__pyx_tuple__24);
-  __pyx_codeobj__25 = (PyObject*)__Pyx_PyCode_New(2, 0, 10, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__24, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_felix_program_vmimodules_v, __pyx_n_s_pixC, 154, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__25)) __PYX_ERR(0, 154, __pyx_L1_error)
+  __pyx_codeobj__25 = (PyObject*)__Pyx_PyCode_New(2, 0, 10, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__24, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_brausse_program_vmimodules, __pyx_n_s_pixC, 154, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__25)) __PYX_ERR(0, 154, __pyx_L1_error)
 
   /* "vmimodules/vmimodules/hitdet/hitC.pyx":172
  * @cython.boundscheck(False)
@@ -18863,7 +18863,7 @@ static int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__26 = PyTuple_Pack(9, __pyx_n_s_pars, __pyx_n_s_dim, __pyx_n_s_gss, __pyx_n_s_yc, __pyx_n_s_xc, __pyx_n_s_length, __pyx_n_s_i, __pyx_n_s_y, __pyx_n_s_x); if (unlikely(!__pyx_tuple__26)) __PYX_ERR(0, 172, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__26);
   __Pyx_GIVEREF(__pyx_tuple__26);
-  __pyx_codeobj__27 = (PyObject*)__Pyx_PyCode_New(2, 0, 9, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__26, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_felix_program_vmimodules_v, __pyx_n_s_quadC, 172, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__27)) __PYX_ERR(0, 172, __pyx_L1_error)
+  __pyx_codeobj__27 = (PyObject*)__Pyx_PyCode_New(2, 0, 9, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__26, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_home_brausse_program_vmimodules, __pyx_n_s_quadC, 172, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__27)) __PYX_ERR(0, 172, __pyx_L1_error)
 
   /* "View.MemoryView":282
  *         return self.name

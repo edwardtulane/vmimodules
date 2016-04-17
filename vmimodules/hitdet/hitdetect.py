@@ -89,7 +89,7 @@ def detect_hits_patch(img, levels, struct):
     for img in seg:
         lb, cn = im.label(img, structure=struct)
 
-        for i in xrange(cn):
+        for i in range(cn):
             slc = null_map.copy()
             mask = np.where(lb == i + 1)
 

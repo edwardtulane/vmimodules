@@ -2,7 +2,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys, os, warnings
-mod_home = os.path.realpath(os.curdir)
+mod_home = os.path.dirname(__file__)
 sys.path.insert(0, mod_home)
 
 vmi_dir = os.path.expanduser('~/vmi')

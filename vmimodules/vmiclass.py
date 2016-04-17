@@ -23,7 +23,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize, SymLogNorm
 from matplotlib.cm import gnuplot2 as gp
-from progressbar import ProgressBar
+
 
 import scipy.fftpack as fft
 import scipy.ndimage as ndimg
@@ -48,6 +48,15 @@ except ImportError as er:
     def ss(arr):
         return np.power(arr, 2).sum()
     bn.ss = ss
+
+try:
+    from progressbar import ProgressBar
+except ImportError as er:
+    print('Could not find ProgressBar. Creating dummy instead.')
+    class ProgressBar(object):
+        def start(self): pass
+        def update(self, *v): pass
+
 
 # import vmimodules.conf
 from . import mod_home, global_dens
@@ -88,7 +97,7 @@ class RawImage(np.ndarray):
 
         if not self.cx or not self.cy:
             self.cy, self.cx = (np.asarray(raw.shape) - 1) / 2
-            warnings.warn(u'No valid center given. Using (%d, %d)' % (self.cx,
+            warnings.warn('No valid center given. Using (%d, %d)' % (self.cx,
                           self.cy))
 
         if not radius:
@@ -96,7 +105,7 @@ class RawImage(np.ndarray):
             dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
                              size[0] - self.cy - 1])
             self.rad_sq = np.min([dx, dy])
-            warnings.warn(u'No valid radius given. Using %d' % (self.rad_sq))
+            warnings.warn('No valid radius given. Using %d' % (self.rad_sq))
 
         return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
                                   buffer=raw.copy(), order='C')
@@ -355,7 +364,10 @@ class CommonMethods(object):
 
     def get_times(self, path):
 
-        from StringIO import StringIO
+        try:
+            from io import StringIO
+        except ImportError as er:
+            from StringIO import StringIO
 
         for line in open(path):
             if line.startswith('MBES_DELAY'):
@@ -391,7 +403,7 @@ class ParseExperiment(CommonMethods):
         
         self.pl = Plotter()
 
-        if 'mesh density' in frame_dict.keys():
+        if 'mesh density' in frame_dict:
             self.dens = frame_dict['mesh density']
         else:
             frame_dict['mesh density'] = global_dens
@@ -464,16 +476,16 @@ class ParseExperiment(CommonMethods):
 
     def read_data(self):
 
-        if not self.frame_dict.has_key('hot_spots'):
+        if not 'hot_spots' in self.frame_dict:
             self.frame_dict['hot_spots'] = []
-        if not self.frame_dict.has_key('rmax'):
+        if not 'rmax' in self.frame_dict:
             self.frame_dict['rmax'] = 0
-        if not self.frame_dict.has_key('offset angle'):
+        if not 'offset angle' in self.frame_dict:
             self.frame_dict['offset angle'] = 0
 
         img, frames = {}, {}
         d = self.frame_dict
-        for i in xrange(self.length):
+        for i in range(self.length):
             f = os.path.join(self.path, self.inx[i])
             img[i] = RawImage(f, d['center x'], d['center y'],
                               d['rmax'], d['hot_spots'])
@@ -511,7 +523,7 @@ class ParseExperiment(CommonMethods):
 
         if self.meta_dict['mode'] == 'counting':
             f = self.frames.values
-            for i in xrange(f.shape[0]):
+            for i in range(f.shape[0]):
                 v = f[i]
                 v = v[v >0]
                 self.frames[i] /= np.float(v.min())
@@ -559,7 +571,7 @@ class ParseExperiment(CommonMethods):
                 self.push_fig(mode='log')
 
             if self.length > 1:
-                for k, v in props.iteritems():
+                for k, v in props.items(): # should be backwards compatible to Python 2
                     fig, axs = plt.subplots(2, 1, sharex=True)
                     axs[0].set_title = '%s distribution' % k
                     sb.kdeplot(v.values, ax=axs[0])
@@ -667,7 +679,7 @@ class ProcessExperiment(CommonMethods):
 
         pbar = ProgressBar().start()
         pbar.maxval = length
-        for i in xrange(length):
+        for i in range(length):
             fr = Frame(self.data.values[i], offs)
             if hasattr(self, 'bg'):
                 fr.interpol()
@@ -725,7 +737,7 @@ class ProcessExperiment(CommonMethods):
 
         radint =  np.linspace(0, 1, self.inv.dim) ** 2
 
-        for i in xrange(length):
+        for i in range(length):
             if hasattr(self, 'bg'):
                 fr = Frame(self.data.values[i] - self.bg_fac[i,0] * self.bg, offs)
             else:
@@ -794,11 +806,11 @@ class ProcessExperiment(CommonMethods):
             prep = lambda a: a
         pbar = ProgressBar().start()
         pbar.maxval = length
-        for i in xrange(length):
+        for i in range(length):
             rect = self.data.values[i]
 #           rect *= 1000
             rect = prep(rect)
-            for j in xrange(rect.shape[0]):
+            for j in range(rect.shape[0]):
                 self.leg[i,j], self.inv_map[i,j], self.inv_res[i,j] = m[0](rect[j])
             pbar.update(i)
 
@@ -1001,7 +1013,7 @@ class ParseSingleShots(CommonMethods):
         pbar = ProgressBar().start()
         pbar.maxval = self.dimd
 
-        for i in xrange(self.dimd):
+        for i in range(self.dimd):
             np.max([maxpix, self.frames[i][1]], axis=0, out=maxpix)
             pbar.update(i)
 
@@ -1099,7 +1111,7 @@ class ParseSingleShots(CommonMethods):
         self.frames = vmp.SingleShotExtractor(flist)
         self.dimd = len(self.frames)
 #       if self.length > 1:
-#           for i in xrange(self.length):
+#           for i in range(self.length):
 #               f = os.path.join(self.path, self.inx[i])
 #               pid, ss_img = vmp.read_singleshots(f)
 
@@ -1142,7 +1154,7 @@ class ParseSingleShots(CommonMethods):
 
         counts = pd.DataFrame({k: [v[(v.ls_rank == 5) & (v['mask'] == True)].x_gau.dropna().shape[0],
                                    v.x_cntr.dropna().shape[0]] 
-                               for k,v in self.mlt.iteritems()},
+                               for k,v in self.mlt.items()},
                                index=['count_gau', 'count_com']).T
 
         return counts
@@ -1158,11 +1170,11 @@ class ParseSingleShots(CommonMethods):
 
 
             if self.parallel:
-                mlt = pd.concat([store.get(k) for k in store.keys() 
+                mlt = pd.concat([store.get(k) for k in store 
                                               if k.startswith('/mlt')])
-                sgl = pd.concat([store.get(k) for k in store.keys() 
+                sgl = pd.concat([store.get(k) for k in store 
                                               if k.startswith('/sgl')])
-                [store.remove(k) for k in store.keys()]
+                [store.remove(k) for k in store]
 
                 store['mlt'] = mlt
                 store['sgl'] = sgl

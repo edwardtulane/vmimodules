@@ -12,6 +12,9 @@ import numpy as np
 import scipy as sp
 import scipy.special as spc
 import scipy.integrate as integ
+import scipy.signal as sig
+import scipy.fftpack as fft
+import scipy.special as bessel
 from . import proc as vmp
 
 # import vmimodules.conf
@@ -55,9 +58,9 @@ class Inverter(object):
 
     def invertFourierHankel(self, arr):
         dim = (arr.shape[1] - 1) /2
-        arr._shift = np.append(arr.rect[:,dim:], arr.rect[:,:dim],axis=1)
-        arr.fourt = fft.fft(arr._shift,axis=1)
-        ft_freqs = fft.fftfreq(arr.fourt.shape[1])
+        shift = np.append(arr[:,dim:], arr[:,:dim],axis=1)
+        fourt = fft.fft(shift,axis=1)
+        ft_freqs = fft.fftfreq(fourt.shape[1])
     ###
         jn = bessel.jn_zeros(0, dim + 2)
         S, R1 = jn[-1], ft_freqs.max()
@@ -67,33 +70,42 @@ class Inverter(object):
         F1_arg = jn / (2 * np.pi * R2)
         F1_arg *= (ft_freqs.shape[0] - 1) / (2 * R1)
         J1_vec = abs(bessel.j1(jn) ** -1)
-        if not arr.__Cmn.shape == (dim + 1, dim + 1):
-            arr.__jn_mat = (jn * jn[:, None]) / S
-            arr.__J1_mat =  J1_vec * J1_vec[:, None]
-            arr.__Cmn = (2 / S) * bessel.j0(arr.__jn_mat) * arr.__J1_mat
-        else:
-            pass
+#       if not arr.__Cmn.shape == (dim + 1, dim + 1):
+        jn_mat = (jn * jn[:, None]) / S
+        J1_mat =  J1_vec * J1_vec[:, None]
+        Cmn = (2 / S) * bessel.j0(jn_mat) * J1_mat
+#       else:
+#           pass
 
-        F1 = np.zeros((arr.fourt.shape[0], dim + 1), dtype='complex')
-        arr.FHT = np.zeros((arr.fourt.shape[0], dim + 1), dtype='complex')
+        F1 = np.zeros((fourt.shape[0], dim + 1), dtype='complex')
+        F2 = np.zeros_like(F1)
+#       FHT = np.zeros((fourt.shape[0], dim + 1), dtype='complex')
 
-        for i, line in enumerate(arr.fourt):
+        for i, line in enumerate(fourt):
             ft_cR = sig.cspline1d(line.real)
             ft_cI = sig.cspline1d(line.imag)
             F1[i] = ( sig.cspline1d_eval(ft_cR, F1_arg) \
                             + 1j * sig.cspline1d_eval(ft_cI, F1_arg) \
                             ) * J1_vec * R1
 
-        arr.FHT = np.dot(F1, arr.__Cmn)
-        arr.FHT /= (R2 * J1_vec)
-        arr.F2_arg = jn / (2 * np.pi * R1)
-        arr.orig = np.dot(arr.FHT, arr.__Cmn)
+        FHT = np.dot(F1, Cmn)
+        FHT /= (R2 * J1_vec)
+        F2_arg = jn / (2 * np.pi * R1)
+        orig = np.dot(FHT, Cmn)
+
+        for i, line in enumerate(FHT):
+            ft_cR = sig.cspline1d(line.real)
+            ft_cI = sig.cspline1d(line.imag)
+            F2[i] = ( sig.cspline1d_eval(ft_cR, F2_arg) \
+                            + 1j * sig.cspline1d_eval(ft_cI, F2_arg) \
+                            ) * J1_vec * R1
+        return F2
 
 #==============================================================================
 
     def invertMaxEnt(self, arr, T=0, P=2):
         import shutil as sh
-        arr_path = os.path.join(mod_home, 'inv')
+        arr_path = os.path.join(mod_home, 'inv', 'bin')
         cur_path = os.path.abspath(os.curdir)
         tmp_path = os.path.join('/tmp', '%i' % os.getpid())
 
@@ -120,7 +132,7 @@ class Inverter(object):
 
     def invertMaxLeg(self, arr, T=0, P=2):
         import shutil as sh
-        arr_path = os.path.join(mod_home, 'inv')
+        arr_path = os.path.join(mod_home, 'inv', 'bin')
         cur_path = os.path.abspath(os.curdir)
         tmp_path = os.path.join('/tmp', '%i' % os.getpid())
 
@@ -180,42 +192,6 @@ class Inverter(object):
 
         return dist
 
-#    def get_raddist(self, arr, radN, order=8, beta=False):
-#        from scipy.ndimage import interpolation as ndipol
-#        import scipy.signal as sig
-#
-#        radius = arr.shape[0]
-#        f = vmp.unfold(arr, v=1)
-#        ck = sig.cspline2d(f, 0)
-#
-#        rr = np.linspace(0, radius, radN)
-#        thth = np.linspace(0, np.pi, len(self.th))
-#        pol_coord, rad_coord = np.meshgrid(thth, rr)
-#        dx = np.pi / (len(self.th) - 1)
-#        
-#        x_coord = rad_coord * np.sin(pol_coord)
-#        y_coord = rad_coord * np.cos(pol_coord) + radius
-#
-#        polar = ndipol.map_coordinates(ck, [y_coord, x_coord], prefilter=False,
-#                                       output=np.float_)
-#
-#        if beta:
-#            lo = polar * np.sin(self.th) # polar **2 ?
-#            up = lo * np.cos(self.th) ** 2
-#            return integ.romb(up, dx=dx, axis=1) / integ.romb(lo, dx=dx, axis=1)
-#
-#        ang_prod = self.lfuns[:,:,None] * polar.T * (np.sin(self.th))[None,:,None]
-#        leg = integ.romb(ang_prod, dx=dx, axis=1)
-#
-#        leg *= np.linspace(0, 1, radN) ** 2
-#        leg = leg[:(order / 2 + 1)]
-#
-#        fac = (np.arange(order + 1) * 2 + 1)
-#        fac = fac[::2]
-#        leg = fac[:,None] * leg
-#
-#        return leg
-
     def invertImage(self, img,  radN, order=8):
 
         legq = np.zeros([4, order / 2 + 1, radN])
@@ -224,7 +200,7 @@ class Inverter(object):
         arrq = np.zeros_like(qu)
         resq = arrq.copy()
 
-        for i in xrange(4):
+        for i in range(4):
             q = qu[i]
             _, arr, res = self.invertMaxEnt(q)
             arrq[i], resq[i] = arr, res
