@@ -158,7 +158,7 @@ def centre_crop(M, cx, cy, crop=0):
     if crop and crop <= dd:
         dd = crop
     elif crop and crop > dd:
-        print 'Given crop size %d exceeds maximum of %d' % (crop, dd)
+        print('Given crop size %d exceeds maximum of %d' % (crop, dd))
     M_centrd = M[(cy - dd):(cy + dd + 1), (cx - dd):(cx + dd + 1)]
     # (the stop is not inclusive)
 
@@ -177,7 +177,7 @@ def hot_spots(M, spots):
             y = px[1]
             M[y, x] = (M[y+1, x] + M[y-1, x] + M[y, x+1] + M[y, x-1]) / 4
     else:
-        print 'No hot spots given!'
+        print('No hot spots given!')
 
     return M
 

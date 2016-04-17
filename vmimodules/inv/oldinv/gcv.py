@@ -13,5 +13,5 @@ def GCV(b, AT, lam):
             
             gcv += norm(num) ** 2 
         gcv /= norm(den) ** 2
-        print i
+        print(i)
     return gcv

@@ -1,0 +1,13 @@
+setup.py
+vmimodules/__init__.py
+vmimodules/inv.py
+vmimodules/proc.py
+vmimodules/vis.py
+vmimodules/vmiclass.py
+vmimodules.egg-info/PKG-INFO
+vmimodules.egg-info/SOURCES.txt
+vmimodules.egg-info/dependency_links.txt
+vmimodules.egg-info/top_level.txt
+vmimodules/hitdet/hitC.c
+vmimodules/inv/legendre/abel.c
+vmimodules/inv/legendre/legendre_polynomial.c

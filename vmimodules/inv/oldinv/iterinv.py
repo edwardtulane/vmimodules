@@ -4,6 +4,7 @@ Created on Tue Sep 23 14:31:32 2014
 
 @author: brausse
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import numpy as np
 import scipy as sp
@@ -28,7 +29,7 @@ h1, h2, q3, q4 = vmp.quadrants(img)
 #h1, h1 = h1 * (1-1.5*drift[:,None]), h2 * (1-5*drift[:,None])
 h1, h2 = h1.ravel(), h2.ravel()
 #h = h1 + h2
-print 'I am here'
+print('I am here')
 Fp = np.dot(ab, h2)
 #tau2 = 5.59E-9
 #tau2 = 1
@@ -67,8 +68,8 @@ for i in np.arange(its):
         nrm = np.linalg.norm(h1 - np.dot(ai, ab).T)
         cond.append([i,nrm])
         grd = nrm - cond[-2][1]
-        print '***', i * 100. / its, 'per cent', '***'
-        print 'Norm:', nrm, 'Gradient:', grd
+        print('***', i * 100. / its, 'per cent', '***')
+        print('Norm:', nrm, 'Gradient:', grd)
 
         if np.abs(grd / nrm) < 1E-5:
             pass
@@ -77,9 +78,9 @@ for i in np.arange(its):
     if break_flag:
         break
 
-#        print neg_I.shape[0], 'negative intenss. and'
-#        print up_bnd.shape[0], 'and', lo_bnd.shape[0], 'beta values constrained'
-        print '\n'
+#        print(neg_I.shape[0], 'negative intenss. and')
+#        print(up_bnd.shape[0], 'and', lo_bnd.shape[0], 'beta values constrained')
+        print('\n')
 
 #%%
 pl.plot(ai)

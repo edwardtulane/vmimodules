@@ -18,6 +18,7 @@ it works, but is rather messy and extremely slow
 For large basis sets the vectorised trans. may easily run out of the memory.
 -- Removed unnecessary dependencies.
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys, os
 sys.path.insert(0, os.path.realpath(os.path.pardir))
@@ -29,8 +30,6 @@ from scipy import integrate
 import scipy.interpolate as intpol
 
 import numexpr as ne
-import bottleneck as bn
-
 
 
 def gen_bas(rad, sig, lev, lodd, blowup=1, cos2=False):
@@ -152,7 +151,7 @@ def AbelVec(f):
     for i in xrange(int(N)):
         g[:,:,i] = np.dot(C, x)
         x =  np.swapaxes(np.dot(Phi[:,:,i], x), 0, 1) + Gam[None,:,:,i] * f[:,None,:,i]
-        print '.',
+        print('.', end='')
     g[:,:,0] = 2 * g[:,:,-1] - g[:,:,-2]
 
     return np.roll(g[:,:,::-1],1, axis=2 )
@@ -163,7 +162,7 @@ def AbelInt(f):
     err = np.zeros(f.shape)
     r = np.arange(f.shape[-1])
     for i, line in enumerate(f):
-        print i
+        print(i)
         ck = intpol.splrep(r, line)
         def integrand(r, x):
             return (intpol.splev(r, ck) * r) / np.sqrt(r**2 - x**2)
@@ -217,7 +216,7 @@ if __name__ == '__main__':
         for m, img in enumerate(ab[l]):
             ab_p[l,m] = project_polar(img, r_max, sigma)
 
-        print '\n Transformed l = %d' % (2*l)
+        print('\n Transformed l = %d' % (2*l))
 
     np.save(store_path + '/bs' + ext, bs.reshape(bs.shape[0] * bs.shape[1], bs.shape[2] ** 2).T)
     np.save(store_path + '/rf' + ext, r_funs[:, ::blowup].T)

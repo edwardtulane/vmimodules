@@ -4,6 +4,7 @@ Created on Wed Sep 24 20:19:00 2014
 
 @author: brausse
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys, os
 
@@ -11,10 +12,11 @@ import numpy as np
 import scipy as sp
 import scipy.special as spc
 import scipy.integrate as integ
-import proc as vmp
+from . import proc as vmp
 
-import vmimodules.conf
-mod_home = vmimodules.conf.mod_home
+# import vmimodules.conf
+from . import mod_home
+# mod_home = vmimodules.conf.mod_home
 stor_dir = os.path.join(mod_home, 'storage')
 
 class Inverter(object):
@@ -60,7 +62,7 @@ class Inverter(object):
         jn = bessel.jn_zeros(0, dim + 2)
         S, R1 = jn[-1], ft_freqs.max()
         R2 = S / (2 * np.pi * R1)
-        print R1, R2, S
+        print(R1, R2, S)
         jn = jn[:-1]
         F1_arg = jn / (2 * np.pi * R2)
         F1_arg *= (ft_freqs.shape[0] - 1) / (2 * R1)

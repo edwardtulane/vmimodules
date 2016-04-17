@@ -4,6 +4,7 @@ Created on Fri Aug 22 01:27:08 2014
 
 @author: felix
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import numpy as np
 from scipy.special import factorial as fact, gammaln
@@ -24,7 +25,7 @@ def X(r, k, sigma):
     u = r / sigma
 
     ll = np.arange(0, k ** 2 + 1)
-    print 'Setting up the coefficients'
+    print('Setting up the coefficients')
     gam = gamma_approx(ll)
     alph = aleph(ll.astype(np.float_))
     R_mat = np.zeros((k_sq, r.shape[0]))
@@ -35,7 +36,7 @@ def X(r, k, sigma):
 #   return np.sum(X_mat * alph[::-1, None], axis=0) * 2 * gam[-1]
 #   frac = alph[::-1] / gam
 #   frac = frac[:, None]
-    print 'Filling the Abel-transformed matrix'
+    print('Filling the Abel-transformed matrix')
     for i, k2 in enumerate(k_vec**2):
         X_mat[i] = np.sum(alph[k2::-1, None] * R_mat[:k2+1] / gam[:k2+1, None], axis=0)
         X_mat[i] *= 2 * gam[k2]

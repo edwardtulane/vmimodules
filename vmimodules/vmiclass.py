@@ -11,12 +11,14 @@ DONE:
 TODO:
 
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 import sys, os, warnings, re, time
 
 import numpy as np
 import scipy as sp
-import bottleneck as bn
+
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize, SymLogNorm
@@ -30,26 +32,32 @@ import scipy.ndimage as im
 import scipy.ndimage.interpolation as ndipol
 import scipy.optimize as opt
 import scipy.signal as sig
-# import scipy.special as bessel
-# import copy as cp
-#
-import proc as vmp
-import hitdetect as hd
-import inv as vminv
-from vis import Plotter
+
+from . import proc as vmp
+from . import hitdet as hd
+from . import inv as vminv
+from .vis import Plotter
 import seaborn.apionly as sb
 sb.set_context('talk')
-#import matplotlib.gridspec as gridspec
-#from matplotlib.widgets import Slider, Button, RadioButtons
 
-import vmimodules.conf
-mod_home = vmimodules.conf.mod_home
+try:
+    import bottleneck as bn
+except ImportError as er:
+    print('Could not find bottleneck. Using numpy instead.')
+    bn = np
+    def ss(arr):
+        return np.power(arr, 2).sum()
+    bn.ss = ss
+
+# import vmimodules.conf
+from . import mod_home, global_dens
+# mod_home = vmimodules.conf.mod_home
 stor_dir = os.path.join(mod_home, 'storage')
 
 if 'GLOBAL_DENS' in os.environ:
     global_dens = int(os.environ['GLOBAL_DENS'])
 else:
-    global_dens = vmimodules.conf.global_dens
+    global_dens = global_dens
 
 mm_to_fs = 6671.28190396304
 
@@ -219,7 +227,7 @@ class Frame(np.ndarray):
                                 method='Nelder-Mead', # method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
-            print 'Writing angular offset and optimised centre: %r' % (self.res.x)
+            print('Writing angular offset and optimised centre: %r' % (self.res.x))
             self.disp[1:] += self.res.x
 
     def find_centre(self, method=2, cntr=True, ang=True):
@@ -237,7 +245,7 @@ class Frame(np.ndarray):
                                 method='Nelder-Mead', #method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                 tol=1E-5, options={'disp': True})
         if self.res.success:
-            print 'Writing optimized centre and angular offset'
+            print('Writing optimized centre and angular offset')
             self.disp += self.res.x
         # Final evaluation
         #self.eval_rect(global_dens)
@@ -288,7 +296,7 @@ class RectImg(Frame):
                                    method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                                    tol=1E-5, options={'disp': True})
         if self.bg_fac.success:
-            print 'Found optimum factor: ', self.bg_fac.x
+            print('Found optimum factor: ', self.bg_fac.x)
         del inv
         return self.bg_fac.x, self.bg_fac.fun
 
@@ -408,7 +416,7 @@ class ParseExperiment(CommonMethods):
             try:
                 assert self.length == len(raws)
             except:    
-                print 'Some rawfiles must be missing'
+                print('Some rawfiles must be missing')
 
         else:
             self.kind = 'seq'
@@ -888,9 +896,14 @@ class ProcessExperiment(CommonMethods):
 
 try:
     from ipyparallel import Client, interactive
-    cl = Client()
+    cl = Client(timeout=2)
     view = cl[:]
 
+except (IOError, OSError) as er:
+    print('No ipyparallel client found. Running in serial execution.')
+    view = None
+
+else:
     @view.parallel()
     @interactive
     def hitfind(img):
@@ -907,8 +920,6 @@ try:
                             levels=levels, imax=i_max, dilate=True, global_analysis=True)
         return hits
 
-except:
-    view = None
  
 #==============================================================================
 
@@ -994,7 +1005,7 @@ class ParseSingleShots(CommonMethods):
             np.max([maxpix, self.frames[i][1]], axis=0, out=maxpix)
             pbar.update(i)
 
-        print 'Normalisation finished'
+        print('Normalisation finished')
 
         self.i_max = im.percentile_filter(maxpix, 95, (70,70))
         rmax = self.singleshot_dict['rmax_imax']
@@ -1025,7 +1036,7 @@ class ParseSingleShots(CommonMethods):
             res = hitglob.map(self.frames[chc][1])
             res.wait()
 #           glob_ana = res.result
-            print 'Global analysis finished. Took %i seconds.' % (res.wall_time)
+            print('Global analysis finished. Took %i seconds.' % (res.wall_time))
 
 #       hitdist = pd.concat([v[0] for v in glob_ana])
         cmpdist = pd.concat(res.result)
@@ -1034,13 +1045,13 @@ class ParseSingleShots(CommonMethods):
 #       self.levels = np.percentile(hitdist, 100 * quants)
 
         self.thr = hd.find_otsus_thr(cmpdist)
-        print "Otsu's threshold used: ", self.thr
+        print("Otsu's threshold used: ", self.thr)
 
 #       del hitdist, cmpdist
         cl.purge_results('all')
 
         if view is None:
-            print 'Starting hit detection in serial execution.'
+            print('Starting hit detection in serial execution.')
             pbar = ProgressBar().start()
             pbar.maxval = self.dimd
 
@@ -1053,7 +1064,7 @@ class ParseSingleShots(CommonMethods):
             self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)}, dtype=np.float_)
 
         else:
-            print 'Starting hit detection in parallel mode running on %i cores.' % len(view)
+            print('Starting hit detection in parallel mode running on %i cores.' % len(view))
             view['levels'] = self.levels
             view['thr'] = self.thr
 
@@ -1075,9 +1086,9 @@ class ParseSingleShots(CommonMethods):
                 with pd.HDFStore('%s-ss.h5' % self.hdf) as store:
                     store['sgl%02d' % i] = sgl
                     store['mlt%02d' % i] = mlt
-#                   print store.get('mlt%02d' % i ) 
+#                   print(store.get('mlt%02d' % i ) )
                 
-                print '%i images processed. Last chunk took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60))
+                print('%i images processed. Last chunk took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60)))
                 cl.purge_results('all')
 
 #       del self.frames

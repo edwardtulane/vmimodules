@@ -4,6 +4,7 @@ Created on Tue Nov 11 14:35:59 2014
 
 @author: brausse
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys, os
 sys.path.insert(0, os.path.realpath(os.path.pardir))
@@ -51,7 +52,7 @@ def test_integ(the, r):
 I_ref = np.zeros(251)
 for i, r  in enumerate(XY[rad:]):
     I_ref[i], er = integrate.quad(test_integ, 0, pi, args=r)
-#    print er
+#    print(er)
 
 test_org = testimage(R, th)
 
@@ -72,7 +73,7 @@ def bsx_integ(the, r):
 I_quadbsx = np.zeros(251)
 for i, r  in enumerate(XY[rad:]):
     I_quadbsx[i], er = integrate.quad(bsx_integ, 0, pi, args=r)
-    print er
+    print(er)
 
 fld = np.ravel(vmp.fold(forward,1,0))
 pbsx = np.dot(np.linalg.inv(FtF + 1 * np.eye(2500)), np.dot(ab, fld))
