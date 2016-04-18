@@ -99,7 +99,7 @@ class Inverter(object):
             F2[i] = ( sig.cspline1d_eval(ft_cR, F2_arg) \
                             + 1j * sig.cspline1d_eval(ft_cI, F2_arg) \
                             ) * J1_vec * R1
-        return F2
+        return FHT, F2, orig
 
 #==============================================================================
 
