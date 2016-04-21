@@ -906,16 +906,11 @@ class ProcessExperiment(CommonMethods):
 #==============================================================================
 #==============================================================================
 
-try:
+if os.system('ps -aux | grep ipyparall | grep -v grep') == 0:
     from ipyparallel import Client, interactive
     cl = Client(timeout=2)
     view = cl[:]
 
-except (IOError, OSError) as er:
-    print('No ipyparallel client found. Running in serial execution.')
-    view = None
-
-else:
     @view.parallel()
     @interactive
     def hitfind(img):
@@ -932,7 +927,10 @@ else:
                             levels=levels, imax=i_max, dilate=True, global_analysis=True)
         return hits
 
- 
+else:
+    print('No ipyparallel client found. Running in serial execution.')
+    view = None
+
 #==============================================================================
 
 class ParseSingleShots(CommonMethods):

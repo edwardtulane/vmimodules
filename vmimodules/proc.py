@@ -329,9 +329,9 @@ def gen_qrs_grid(radius, radN, polN, alpha):
     """
     Generate a polar grid of displaced rescattering circles.
     """
-    radii = -np.linspace(-1.26, +1.26, radN)
+    radii = -np.linspace(-1.26, +1.26, radN) * 1.1
 #   radii = np.abs(radii)
-    offs = np.linspace(-1, +1, radN)
+    offs = np.linspace(-1, +1, radN) * 1.1
     angles = np.linspace(0, 2*np.pi, polN)
     pol_coord, rad_coord = np.meshgrid(angles, radii)
     x_coord = rad_coord * np.sin(pol_coord)
@@ -404,6 +404,8 @@ def fold(img_in, v=False, h=False):
 def unfold(img_in, v=False, h=False):
     img = img_in.copy()
     cntr_v, cntr_h = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
+    assert cntr_v.is_integer() and cntr_h.is_integer()
+    cntr_h, cntr_v = int(cntr_h), int(cntr_v)
     if not (v or h):
         raise ValueError('Where shall I unfold? (v, h) = bool')
 
@@ -418,6 +420,10 @@ def unfold(img_in, v=False, h=False):
 def quadrants(img_in):
     img = img_in.copy()
     cntr_h, cntr_v = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
+
+    assert cntr_v.is_integer() and cntr_h.is_integer()
+    cntr_h, cntr_v = int(cntr_h), int(cntr_v)
+
     q1, q2 = img[cntr_h:,cntr_v:], img[cntr_h:,cntr_v::-1]
     q3, q4 = img[cntr_h::-1,cntr_v::-1], img[cntr_h::-1,cntr_v:]
     return np.asarray([q1, q2, q3, q4])
@@ -466,18 +472,45 @@ def map_quadrant_polar(qu, radN=251, polN=257, smooth=0.0):
     else:
         return pol
 
-def get_raddist(qu, radN, polN=257, order=8):
+def get_raddist(qu, radN, polN=257, order=8, cov=False):
     pol = map_quadrant_polar(qu, radN)
 
     th = np.linspace(0, 0.5*np.pi, polN)
     rad2 = np.arange(radN)**2
-    kern = pol * np.sin(th) * rad2[:,None]
+#   kern = pol * np.sin(th) * rad2[:,None]
 #   dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
 
     legvan = np.polynomial.legendre.legvander(np.cos(th), order)
-    x, res, rank, cond = np.linalg.lstsq(legvan[:,::2], pol.T)
+    legvan = legvan[:,::2]
+    x, res, rank, cond = np.linalg.lstsq(legvan, pol.T)
 
     return x * rad2[None,:]
+
+def get_raddist_weighted(qu, sig, radN, polN=257, order=8):
+    pol = map_quadrant_polar(qu, radN)
+    sig_p = map_quadrant_polar(sig, radN)
+    th = np.linspace(0, 0.5*np.pi, polN)
+    rad2 = np.arange(radN)**2
+#   kern = pol * np.sin(th) * rad2[:,None]
+#   dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
+    x = np.zeros([order/2+1, radN])
+    sig_out = np.zeros_like(x)
+
+    for i in range(radN):
+        l = pol[i]
+        w = 1 / sig_p[i]
+        l *= w
+        legvan = np.polynomial.legendre.legvander(np.cos(th), order)
+        legvan = legvan[:,::2]
+        legvan *= w[:,None]
+        x[:,i], res, rank, cond = np.linalg.lstsq(legvan, l)
+
+        cov_m = np.linalg.inv(legvan.T.dot(legvan))
+        sig_out[:,i] = np.sqrt(np.diag(cov_m))
+
+        
+
+    return x * rad2[None,:], sig_out
 
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
