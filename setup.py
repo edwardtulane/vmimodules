@@ -8,7 +8,7 @@ abel = Extension('vmimodules.inv.abel', ['vmimodules/inv/legendre/legendre_polyn
                 )
 setup(
   name = 'vmimodules',
-  version='0.3',
+  version='0.6',
   ext_modules = [abel, cythonize(hitC)[0]],
 # ext_modules = [abel],
   packages = ['vmimodules'],

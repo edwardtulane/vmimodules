@@ -87,13 +87,18 @@ class RawImage(np.ndarray):
         else:
             raw = file
 
-        self.cx, self.cy = xcntr, ycntr
-        self.rad_sq = radius
-
         if hotspots:
             raw = vmp.hot_spots(raw, hotspots)
         else:
             pass
+
+        return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
+                                  buffer=raw.copy(), order='C')
+
+    def __init__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[]):
+
+        self.cx, self.cy = xcntr, ycntr
+        self.rad_sq = radius
 
         if not self.cx or not self.cy:
             self.cy, self.cx = (np.asarray(raw.shape) - 1) / 2
@@ -106,9 +111,6 @@ class RawImage(np.ndarray):
                              size[0] - self.cy - 1])
             self.rad_sq = np.min([dx, dy])
             warnings.warn('No valid radius given. Using %d' % (self.rad_sq))
-
-        return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
-                                  buffer=raw.copy(), order='C')
 
     def crop_square(self, offset=0):
         cropd = vmp.centre_crop(self, self.cx, self.cy, self.rad_sq)
@@ -132,8 +134,15 @@ class Frame(np.ndarray):
 
     def __new__(self, frame, offs=0):
 
-        self.cy, self.cx = (np.asarray(frame.shape) - 1) / 2
         size = frame.shape
+
+        return np.ndarray.__new__(self, shape=size, buffer=frame.copy().data,
+                                  dtype=frame.dtype.name, order='C')
+
+    def __init__(self, frame, offs=0):
+
+        size = frame.shape
+        self.cy, self.cx = (np.asarray(frame.shape) - 1) / 2
         dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
                          size[0] - self.cy - 1])
         self.rad_sq = np.min([dx, dy])
@@ -141,12 +150,14 @@ class Frame(np.ndarray):
         self.offset = offs
         self.disp = np.array([0.0, 0.0, 0.0])
 
-#       if do_intpol:
-#           self.interpol(self)
-#       This doesn't work, requires a Frame instance. __init__() breaks __new__ (?)
+        self.interpol()
 
-        return np.ndarray.__new__(self, shape=size, buffer=frame.copy().data,
-                                  dtype=frame.dtype.name, order='C')
+#       if do_intpol:
+#       This doesn't work, requires a Frame instance. __init__() breaks __new__ (?)
+#       Explanation: __init__ is called after __new__. The difference is that __new__ is
+#       a static method of the class creating the instance, wheras __init__ initialises
+#       the instance
+
 ###
 
     def interpol(self, smooth=0.0):
@@ -164,12 +175,16 @@ class Frame(np.ndarray):
                                    reshape=False, prefilter=False)
 
     def eval_rect(self, density=global_dens, displace=[0., 0.], phi=0):
+        """Deprecated. Superseded by eval_cart."""
+        self.eval_rect(density, displace, phi)
+
+    def eval_cart(self, density=global_dens, displace=[0., 0.], phi=0):
         """ Project the image onto a rectangular grid with given spacing """
         coords = vmp.gen_rect(self.diam, density, self.disp[1:] + displace, 
                               phi = self.offset + self.disp[0] + phi)
         rect = ndipol.map_coordinates(self.ck, coords, prefilter=False,
                                       output=np.float_)
-        return RectImg(rect)
+        return CartImg(rect)
 
     def eval_polar(self, radN=251, polN=1025):
         """ Project the image onto a polar grid with radial and polar denss."""
@@ -178,90 +193,36 @@ class Frame(np.ndarray):
         polar = ndipol.map_coordinates(self.ck, coords, prefilter=False)
         return PolarImg(polar)
 
-    def rad_dist(self, radN, inv):
-            self.interpol()
-            polar = self.eval_polar(radN)
-            polar = vmp.fold(polar, h=1)
-
-            ang_prod = inv.lfuns[:,:,None] * polar.T * (np.sin(inv.th))[None,:,None]
-            leg = integ.romb(ang_prod, axis=1)
-            leg *= inv._Inverter__dim2
-            leg = leg[:5]
-
-            fac = (np.arange(9) * 2 + 1)
-            fac = fac[::2]
-            leg = fac[:,None] * leg
-
-            return leg
-
-
-#    def invertedpolar(self, radN, polN, inv='basex'):
-#        """ Project the inverted image onto a polar grid."""
-#        coords = vmp.gen_polar((self.dens_rect - 1) / 2, radN, polN, [0, 0, 0])
-#        ck = sig.cspline2d(self.bsx, 0.0)
-#        self.bsx_pol = ndipol.map_coordinates(ck, coords, prefilter=False)
-
 ### Finding the centre point and offset angle
 
-    def __eval_sym(self, delta):
-        """ Returns the total imaginary part of the 2D FFT of self.rect """
-        rect_in = self.eval_rect(global_dens, delta[1:], phi=delta[0])
-        ft = fft.fft2(rect_in)
-        return abs(ft.imag).sum()
-
-    def __eval_sym2(self, delta):
-        """ Use Bordas' criterion. I found it to be inferior """
-        rect_in = self.eval_rect(global_dens, delta[1:], phi=delta[0])
-#       rect_in = self.rect.copy()
-        Tstar = rect_in * rect_in[::-1, ::-1]
-        return -1 * np.sum(Tstar)
-
-    def __eval_sym3(self, delta, dens, radN):
-        img = self.eval_rect(dens, delta, phi=0
-                            )#delta[0])
-        img = vmp.crop_circle(img, radN)
+    def __sym_objective(self, disp):
+        img = self.eval_cart(self.diam, disp[1:], phi=disp[0])
+        img = vmp.crop_circle(img, (self.diam -1) / 2)
         qu = vmp.quadrants(img)
-        rad = np.zeros([4, radN+1])
-        for j,q in enumerate(qu):
-            rad[j] = vmp.get_raddist(q, radN+1, order=2)[0]#[250:290]
-            rad[j] /= rad[j].sum()    
-        return -1 * rad.prod(0).max()
+        qm = q[qsel].mean(0)
+        return np.power(qm[None,:,:] - rect, 2).sum()
 
-    def centre_pbsx(self, dens=501):
-        """ Brute Force centering with the pBasex method """
-        init_vec = [0, 0]
-        radN = (dens - 1) / 2
-#       inv = vminv.Inverter(radN, 8, dryrun=True)
-        self.res = opt.minimize(self.__eval_sym3, init_vec, args=(dens, radN),
-                                method='Nelder-Mead', # method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
-                                tol=1E-5, options={'disp': True})
-        if self.res.success:
-            print('Writing angular offset and optimised centre: %r' % (self.res.x))
-            self.disp[1:] += self.res.x
 
-    def find_centre(self, method=2, cntr=True, ang=True):
-        """ Iterate 'eval_sym' with a bound BFGS alg. verbosely ('disp') 
-            More or less deprecated """
-
+    def find_centre(self, cntr=True, ang=True):
         init_vec = [0, 0, 0]
-        meth_d = {1: self.__eval_sym, 2: self.__eval_sym2}
-        domain = np.tile([-10, 10], 3).reshape(3, 2)
+
         if not cntr:
             domain[1:] = 0.0
         if not ang:
             domain[0] = 0.0
-        self.res = opt.minimize(meth_d[method], init_vec,
-                                method='Nelder-Mead', #method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
-                                tol=1E-5, options={'disp': True})
-        if self.res.success:
+
+        res = opt.minimize(self.__sym_objective, init_vec,
+                           method='Nelder-Mead', #method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
+                           tol=1E-5, options={'disp': True})
+        if res.success:
             print('Writing optimized centre and angular offset')
-            self.disp += self.res.x
-        # Final evaluation
-        #self.eval_rect(global_dens)
+            return res
+        else:
+            warnings.warn('Centering failed!')
 
 #===============================================================================
 
-class RectImg(Frame):
+class CartImg(Frame):
     """
     Processed image after interpolation and recasting.
     Methods:
@@ -269,7 +230,12 @@ class RectImg(Frame):
     -- find_bg_factor: early stage of bg subtraction improvement
     """
     def __new__(self, frame):
+        size = frame.shape[-2:]
 
+        return np.ndarray.__new__(self, shape=frame.shape, dtype=np.float_,
+                                  buffer=frame.copy().data, order='C')
+
+    def __init__(self, frame):
         size = frame.shape[-2:]
         self.cy, self.cx = (np.asarray(size) - 1) / 2
         dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
@@ -277,8 +243,16 @@ class RectImg(Frame):
         self.rad_sq = np.min([dx, dy])
         self.diam = size[0]
 
-        return np.ndarray.__new__(self, shape=frame.shape, dtype=np.float_,
-                                  buffer=frame.copy().data, order='C')
+    def quadrants(self):
+        return vmp.quadrants(self)
+
+    def rad_dist(self, radN, polN=257, order=8):
+        qu = vmp.quadrants(self)
+        rd = np.zeros([4, (order/2)+1, radN])
+        for i, q in enumerate(qu):
+            rd[i] = vmp.get_raddist(q, radN, polN, order)
+        return rd
+
 
     def __eval_bg_fac(self, fac, bg, inv):
         frame = self - fac * bg
@@ -318,11 +292,13 @@ class PolarImg(np.ndarray):
     def __new__(self, frame):
 
         size = frame.shape
-        self.cy, self.cx = (0, 0)
-        drad, dphi = frame.shape
 
         return np.ndarray.__new__(self, shape=size, dtype=np.float_,
                                   buffer=frame.copy().data, order='C')
+    def __init__(self, frame):
+        self.cy, self.cx = (0, 0)
+        drad, dphi = frame.shape
+
 
 
 #==============================================================================
@@ -690,7 +666,7 @@ class ProcessExperiment(CommonMethods):
                 bg = bg.eval_rect(151)
                 self.bg_fac[i] = r.find_bg_fac(bg, 151)
                 fr = Frame(self.data.values[i] - self.bg_fac[i,0] * self.bg, offs)
-            fr.interpol()
+#           fr.interpol()
             fr.centre_pbsx(cntr, ang, dens)
             self.opt[i,0], self.opt[i,1:] = fr.res.fun, fr.res.x
             pbar.update(i)
@@ -743,7 +719,7 @@ class ProcessExperiment(CommonMethods):
             else:
                 fr = Frame(self.data.values[i], offs)
             fr.disp = disp
-            fr.interpol()
+#           fr.interpol()
             r = fr.eval_rect(dens)
             if crop:
                 rect = vmp.crop_circle(r, crop)

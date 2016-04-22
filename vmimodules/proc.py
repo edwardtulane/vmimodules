@@ -404,7 +404,9 @@ def fold(img_in, v=False, h=False):
 def unfold(img_in, v=False, h=False):
     img = img_in.copy()
     cntr_v, cntr_h = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
-    assert cntr_v.is_integer() and cntr_h.is_integer()
+
+    if any(isinstance(cntr_v, float), isinstance(cntr_h, float)):
+        assert cntr_v.is_integer() and cntr_h.is_integer()
     cntr_h, cntr_v = int(cntr_h), int(cntr_v)
     if not (v or h):
         raise ValueError('Where shall I unfold? (v, h) = bool')
@@ -421,7 +423,8 @@ def quadrants(img_in):
     img = img_in.copy()
     cntr_h, cntr_v = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
 
-    assert cntr_v.is_integer() and cntr_h.is_integer()
+    if any(isinstance(cntr_v, float), isinstance(cntr_h, float)):
+        assert cntr_v.is_integer() and cntr_h.is_integer()
     cntr_h, cntr_v = int(cntr_h), int(cntr_v)
 
     q1, q2 = img[cntr_h:,cntr_v:], img[cntr_h:,cntr_v::-1]
