@@ -96,10 +96,10 @@ def abel_integrate(radN, polN, rk, sig, l):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 50
-    polN = 129
+    r_max = 250
+    polN = 257
     sigma = 2.00
-    n_even = 4
+    n_even = 8
     n_odd = 0
 
     store_path = os.path.join(sys.path[0], 'storage')

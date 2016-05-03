@@ -405,7 +405,7 @@ def unfold(img_in, v=False, h=False):
     img = img_in.copy()
     cntr_v, cntr_h = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
 
-    if any(isinstance(cntr_v, float), isinstance(cntr_h, float)):
+    if any([isinstance(cntr_v, float), isinstance(cntr_h, float)]):
         assert cntr_v.is_integer() and cntr_h.is_integer()
     cntr_h, cntr_v = int(cntr_h), int(cntr_v)
     if not (v or h):
@@ -423,7 +423,7 @@ def quadrants(img_in):
     img = img_in.copy()
     cntr_h, cntr_v = (img.shape[0] - 1) / 2,  (img.shape[1] - 1) / 2
 
-    if any(isinstance(cntr_v, float), isinstance(cntr_h, float)):
+    if any([isinstance(cntr_v, float), isinstance(cntr_h, float)]):
         assert cntr_v.is_integer() and cntr_h.is_integer()
     cntr_h, cntr_v = int(cntr_h), int(cntr_v)
 
@@ -479,7 +479,7 @@ def get_raddist(qu, radN, polN=257, order=8, cov=False):
     pol = map_quadrant_polar(qu, radN)
 
     th = np.linspace(0, 0.5*np.pi, polN)
-    rad2 = np.arange(radN)**2
+    rad2 = np.linspace(0, 1, radN)**2
 #   kern = pol * np.sin(th) * rad2[:,None]
 #   dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
 

@@ -176,7 +176,7 @@ class Frame(np.ndarray):
 
     def eval_rect(self, density=global_dens, displace=[0., 0.], phi=0):
         """Deprecated. Superseded by eval_cart."""
-        self.eval_rect(density, displace, phi)
+        return self.eval_cart(density, displace, phi)
 
     def eval_cart(self, density=global_dens, displace=[0., 0.], phi=0):
         """ Project the image onto a rectangular grid with given spacing """
@@ -195,15 +195,15 @@ class Frame(np.ndarray):
 
 ### Finding the centre point and offset angle
 
-    def __sym_objective(self, disp):
+    def __sym_objective(self, disp, qsel):
         img = self.eval_cart(self.diam, disp[1:], phi=disp[0])
         img = vmp.crop_circle(img, (self.diam -1) / 2)
         qu = vmp.quadrants(img)
-        qm = q[qsel].mean(0)
-        return np.power(qm[None,:,:] - rect, 2).sum()
+        qm = qu[qsel].mean(0)
+        return np.power(qm[None,:,:] - qu, 2).sum()
 
 
-    def find_centre(self, cntr=True, ang=True):
+    def find_centre(self, cntr=True, ang=True, qsel= [0,1,2,3]):
         init_vec = [0, 0, 0]
 
         if not cntr:
@@ -211,11 +211,10 @@ class Frame(np.ndarray):
         if not ang:
             domain[0] = 0.0
 
-        res = opt.minimize(self.__sym_objective, init_vec,
+        res = opt.minimize(self.__sym_objective, init_vec, args=(qsel),
                            method='Nelder-Mead', #method='L-BFGS-B', bounds=domain,#'L-BFGS-B'
                            tol=1E-5, options={'disp': True})
         if res.success:
-            print('Writing optimized centre and angular offset')
             return res
         else:
             warnings.warn('Centering failed!')
@@ -297,7 +296,27 @@ class PolarImg(np.ndarray):
                                   buffer=frame.copy().data, order='C')
     def __init__(self, frame):
         self.cy, self.cx = (0, 0)
-        drad, dphi = frame.shape
+        self.drad, self.dphi = frame.shape
+
+    def quadrants(self):
+        quad_phi = (self.dphi - 1) / 4
+        qu = [self[:,0:quad_phi+1], self[:,2*quad_phi:quad_phi-1:-1],
+              self[:,2*quad_phi:3*quad_phi+1], self[:,4*quad_phi:3*quad_phi-1:-1]]
+
+        return np.array(qu)
+
+    def get_cos2(self, qsel=[0,1,2,3]):
+        qu = self.quadrants()
+        qu = qu.mean(0)
+        th = np.linspace(0, np.pi * 0.5, qu.shape[1])
+        costh = np.cos(th)
+        sinth = np.sin(th)
+
+        lo = qu * sinth
+        up = lo * costh ** 2
+        return integ.romb(up, axis=1) / integ.romb(lo, axis=1)
+        
+
 
 
 
