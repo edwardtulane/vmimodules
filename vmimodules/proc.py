@@ -325,6 +325,12 @@ def gen_polar(radius, radN, polN, disp, phi=0):
 
     return [y_coord - disp[1], x_coord - disp[0]]
 
+def gen_polar_back_transform(radius, polN):
+    x = np.arange((2*radius)+1) - radius
+    x,y = np.meshgrid(x, x)
+    theta = ((np.arctan2(x,y) / np.pi) + 1) * (polN-1)
+    r = np.sqrt(x**2 + y**2)
+
 def gen_qrs_grid(radius, radN, polN, alpha):
     """
     Generate a polar grid of displaced rescattering circles.
@@ -475,8 +481,11 @@ def map_quadrant_polar(qu, radN=251, polN=257, smooth=0.0):
     else:
         return pol
 
-def get_raddist(qu, radN, polN=257, order=8, cov=False):
-    pol = map_quadrant_polar(qu, radN)
+def get_raddist(qu, radN, polN=257, order=8, even=True, polar=False):
+    if not polar:
+        pol = map_quadrant_polar(qu, radN)
+    else:
+        pol = qu
 
     th = np.linspace(0, 0.5*np.pi, polN)
     rad2 = np.linspace(0, 1, radN)**2
@@ -484,7 +493,8 @@ def get_raddist(qu, radN, polN=257, order=8, cov=False):
 #   dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
 
     legvan = np.polynomial.legendre.legvander(np.cos(th), order)
-    legvan = legvan[:,::2]
+    if even:
+        legvan = legvan[:,::2]
     x, res, rank, cond = np.linalg.lstsq(legvan, pol.T)
 
     return x * rad2[None,:]
