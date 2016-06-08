@@ -29,6 +29,9 @@ class Inverter(object):
     def __init__(self, r_max=250, n_even=8, dir=stor_dir, dryrun=0):
         self.__ext = '-'.join(('',  str(r_max), str(n_even))) #'-' + str(r_max)+'-'+str(n_even)
 
+        self.dim = r_max + 1
+        self.__dim2 = np.linspace(0, 1, self.dim) ** 2
+
         if not dryrun:
             self.ab = np.load(stor_dir + '/ab' + self.__ext + '.npy')
             self.bs = np.load(stor_dir + '/bs' + self.__ext + '.npy')
@@ -42,9 +45,6 @@ class Inverter(object):
             self.lvals = (n_even / 2) + 1
             self.n_funs = self.bs.shape[1] / self.lvals
             self.polN = self.ab.shape[1] / self.dim
-
-        self.dim = r_max + 1
-        self.__dim2 = np.linspace(0, 1, self.dim) ** 2
 #       self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
 #   set up a context manager?

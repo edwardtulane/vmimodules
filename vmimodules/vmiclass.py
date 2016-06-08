@@ -101,12 +101,12 @@ class RawImage(np.ndarray):
         self.rad_sq = radius
 
         if not self.cx or not self.cy:
-            self.cy, self.cx = (np.asarray(raw.shape) - 1) / 2
+            self.cy, self.cx = (np.asarray(self.shape) - 1) / 2
             warnings.warn('No valid center given. Using (%d, %d)' % (self.cx,
                           self.cy))
 
         if not radius:
-            size = raw.shape
+            size = self.shape
             dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
                              size[0] - self.cy - 1])
             self.rad_sq = np.min([dx, dy])
@@ -235,12 +235,15 @@ class CartImg(Frame):
                                   buffer=frame.copy().data, order='C')
 
     def __init__(self, frame):
-        size = frame.shape[-2:]
-        self.cy, self.cx = (np.asarray(size) - 1) / 2
-        dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
-                         size[0] - self.cy - 1])
-        self.rad_sq = np.min([dx, dy])
-        self.diam = size[0]
+        Frame.__init__(self, frame)
+#       size = frame.shape[-2:]
+#       self.cy, self.cx = (np.asarray(size) - 1) / 2
+#       dx, dy = np.min([self.cx, size[1] - self.cx - 1]), np.min([self.cy,
+#                        size[0] - self.cy - 1])
+#       self.rad_sq = np.min([dx, dy])
+#       self.diam = size[0]
+#       self.disp = np.array([0,0,0])
+#       self.offset = 0
 
     def quadrants(self):
         return vmp.quadrants(self)
