@@ -59,7 +59,7 @@ except ImportError as er:
 
 
 # import vmimodules.conf
-from . import mod_home, global_dens
+from . import mod_home, global_dens, vmi_dir
 # mod_home = vmimodules.conf.mod_home
 stor_dir = os.path.join(mod_home, 'storage')
 
@@ -383,7 +383,7 @@ class ParseExperiment(CommonMethods):
     def __init__(self, date, seqNo=None, inx=None, setup='tw', 
                  meta_dict={}, frame_dict={}, time_dict={}):
         global header_keys, meta_keys, frame_keys, time_keys, mm_to_fs
-        vmi_dir = vmimodules.conf.vmi_dir
+#       vmi_dir = vmimodules.conf.vmi_dir
 
         self.date, self.setup = pd.Timestamp(date), setup
         self.access = pd.Timestamp(time.asctime())

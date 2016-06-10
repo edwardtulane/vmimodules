@@ -503,7 +503,7 @@ def get_raddist_weighted(qu, sig, radN, polN=257, order=8):
     pol = map_quadrant_polar(qu, radN)
     sig_p = map_quadrant_polar(sig, radN)
     th = np.linspace(0, 0.5*np.pi, polN)
-    rad2 = np.arange(radN)**2
+    rad2 = np.linspace(0, 1, radN)**2
 #   kern = pol * np.sin(th) * rad2[:,None]
 #   dist = integrate.romb(kern, axis=1, dx=np.pi/(polN-1))
     x = np.zeros([order/2+1, radN])
@@ -523,7 +523,7 @@ def get_raddist_weighted(qu, sig, radN, polN=257, order=8):
 
         
 
-    return x * rad2[None,:], sig_out
+    return x * rad2[None,:], sig_out * rad2[None,:]
 
 #-----------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------#
