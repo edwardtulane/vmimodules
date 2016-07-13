@@ -35,11 +35,19 @@ def rawread(filename):
     return M
 
 def read_singleshots(fname):
-    """
+    """Read the pulse ids and images from a single shot file.
+       Parameters
+       ----------
+       fname: Path to .sss file
+
+       Returns
+       -------
+       ids : array of pulse idsm shape (len(seq),)
+       ss_arr : array of acquired images, shape (len(seq), y_dim, x_dim)
     """
     arr = np.memmap(fname, dtype=np.int32,mode='r')
     x_dim, y_dim, seqlen = arr[0:3]
-    slice_len = (x_dim * y_dim) / 4
+    slice_len = (x_dim * y_dim) / 4    # 8 to 32 bit conversion
     ids = np.zeros(seqlen, dtype=np.int32)
     ss_arr = np.zeros((seqlen, y_dim, x_dim), dtype=np.int8)
     

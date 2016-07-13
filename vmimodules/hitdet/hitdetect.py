@@ -130,8 +130,8 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
 
     hit_col = ['y_cntr', 'x_cntr']
     sgl_cols = ['x_wid', 'y_wid', 'count']
-    prop_cols = ['area', 'volume', 'y_gau', 'x_gau', 'y_sig', 'x_sig', 'qmax',
-                 'discriminant', 'ls_rank', 'cond_no', 'ellip', 'resid']
+    prop_cols = ['y_gau', 'x_gau', 'y_sig', 'x_sig', 'qmax',
+                ]
 
 #   levels = np.linspace(0,1, no_levels)
     levels = levels[::-1]
@@ -217,8 +217,8 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
             if len(res) == 0: res = np.nan
             else: res = float(res)
 
-            prop_mlt.append( (are, vol, y_gau + p[0], x_gau + p[1], sig_y, sig_x, qmax,
-                              dscr, rank, cond, ellip, res) )
+            prop_mlt.append( (y_gau + p[0], x_gau + p[1], sig_y, sig_x, qmax,
+                             ) )
 
 
     assert len(prop_mlt) == np.sum([v[2] for v in prop_sgl])
@@ -324,4 +324,78 @@ def transform_hits(hits, xcntr, ycntr, phi):
     
     
     return hitcopy
+
+def bin_hits_cartesian(hits, dim_hit, dim_img):
+    """Transform detected hits into a cartesian image.
+
+    Parameters
+    ----------
+    hits : pandas.DataFrame containing the detected hits.
+    dim_hit : dimension of the detector in pix
+    dim_img : final image dimension
+
+    Returns
+    -------
+    img : array, image of shape (dim_img, dim_img)
+
+    """
+
+    dim = (dim_hit - 1) / 2
+    lev = np.linspace(-dim, dim, dim_img + 1)
+    x = hits.loc[:,:,'x_gau'].unstack().dropna()
+    y = hits.loc[:,:,'y_gau'].unstack().dropna()
+
+    xydf = pd.DataFrame(dict(x_gau=x, y_gau=y))
+    xydf.eval('r = sqrt(y_gau ** 2 + x_gau ** 2)')
+#   xydf = xydf[(np.abs(xydf.r) < 410)]
+
+    vcx = pd.cut(xydf.x_gau, lev)
+    vcy = pd.cut(xydf.y_gau, lev)    
+
+    xy_g = xydf.groupby([vcy, vcx])
+    img = xy_g.count()['x_gau']
+
+    img[img.isnull()] = 0
+    img = img.unstack().values
+
+    return img
+
+def bin_hits_polar(hits, dim_hit, rN, phiN):
+    """Transform detected hits into a polar projection.
+
+    Parameters
+    ----------
+    hits : TODO
+    dim_hit : TODO
+    rN : TODO
+    phiN : TODO
+
+    Returns
+    -------
+    TODO
+
+    """
+    dim = (dim_hit - 1) / 2
+#   lev = np.linspace(-dim, dim, dim_img)
+    rr = np.linspace(0, dim, rN)
+    phph = np.linspace(-np.pi, np.pi, phiN)
+
+    x = hits.loc[:,:,'x_gau'].unstack().dropna()
+    y = hits.loc[:,:,'y_gau'].unstack().dropna()
+
+    xydf = pd.DataFrame(dict(x_gau=x, y_gau=y))
+    xydf.eval('r = sqrt(y_gau ** 2 + x_gau ** 2)')
+    xydf.eval('phi = arctan2(x_gau, y_gau)')
+#   xydf = xydf[(np.abs(xydf.r) < 410)]
+
+    vcx = pd.cut(xydf.r, rr)
+    vcy = pd.cut(xydf.phi, phph)
+
+    xy_g = xydf.groupby([vcy, vcx])
+    img = xy_g.count()['x_gau']
+
+    img[img.isnull()] = 0
+    img = img.unstack().values
+
+    return img
 
