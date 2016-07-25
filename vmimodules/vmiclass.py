@@ -1029,7 +1029,7 @@ class ParseSingleShots(CommonMethods):
             pbar = ProgressBar().start()
             pbar.maxval = 100
 
-            for i, img in enumerate(self.frames[chc]):
+            for i, img in enumerate(self.frames[chc][1]):
                 glob_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s,
                                 levels=self.levels, imax=self.i_max, dilate=True, global_analysis=True))
                 pbar.update(i)
