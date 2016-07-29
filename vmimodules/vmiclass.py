@@ -904,32 +904,23 @@ class ProcessExperiment(CommonMethods):
 #==============================================================================
 #==============================================================================
 
-if os.system('ps -aux | grep ipyparall | grep -v grep') == 0:
-    from ipyparallel import Client, interactive
-    cl = Client(timeout=2)
-    view = cl[:]
 
-    @view.parallel()
-    @interactive
-    def hitfind(img):
-        from vmimodules import detect_hits_img
-        sgl, mlt, ot, = detect_hits_img(img, comp_c, comp_s, levels=levels, thr=thr,
-                                        imax=i_max, dilate=True)
-        return sgl, mlt, ot
-
-    @view.parallel()
-    @interactive
-    def hitglob(img):
-        from vmimodules import detect_hits_img
-        hits = detect_hits_img(img, comp_c, comp_s,
-                            levels=levels, imax=i_max, dilate=True, global_analysis=True)
-        return hits
-
-else:
-    print('No ipyparallel client found. Running in serial execution.')
-    view = None
+# else:
+#    print('No ipyparallel client found. Running in serial execution.')
+#    view = None
 
 #==============================================================================
+
+from concurrent.futures import ProcessPoolExecutor
+def hitglob(img, comp_c, comp_s, levels, i_max):
+    hits = hd.detect_hits_img(img, comp_c, comp_s,
+                        levels=levels, imax=i_max, dilate=True, global_analysis=True)
+    return hits
+
+def hitfind(img, comp_c, comp_s, levels, thr, i_max):
+    hits = hd.detect_hits_img(img, comp_c, comp_s, thr=thr, levels=levels, 
+                              imax=i_max, dilate=True, global_analysis=False)
+    return hits
 
 class ParseSingleShots(CommonMethods):
 
@@ -1023,33 +1014,37 @@ class ParseSingleShots(CommonMethods):
         chc = np.random.choice(self.dimd, 100, replace=False)
         glob_ana, locl_ana = list(), list()
 
-        if view is None:
-            self.parallel = False
+#         if view is None:
+#             self.parallel = False
+# 
+#             pbar = ProgressBar().start()
+#             pbar.maxval = 100
+# 
+#             for i, img in enumerate(self.frames[chc][1]):
+#                 glob_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s,
+#                                 levels=self.levels, imax=self.i_max, dilate=True, global_analysis=True))
+#                 pbar.update(i)
+# 
+#             cmpdist = pd.concat(glob_ana)
+#                 
+#         else:
+        self.parallel = True
+#       import ipdb
+#       ipdb.set_trace()
 
-            pbar = ProgressBar().start()
-            pbar.maxval = 100
+        comp_c, comp_s = self.comp_c, self.comp_s
+        i_max = self.i_max
+        levels = self.levels
+        executor = ProcessPoolExecutor(6)
 
-            for i, img in enumerate(self.frames[chc][1]):
-                glob_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s,
-                                levels=self.levels, imax=self.i_max, dilate=True, global_analysis=True))
-                pbar.update(i)
+    #           glob_ana = res.result
+        ar = self.frames[chc][1]
+        arlen = len(ar)
+        cmpdist = pd.concat(executor.map(hitglob, ar, arlen*[self.comp_c], arlen*[self.comp_s],
+                                         arlen * [self.levels], arlen * [self.i_max]))
+        executor.shutdown()
 
-            cmpdist = pd.concat(glob_ana)
-                
-        else:
-            self.parallel = True
-
-            view['comp_c'], view['comp_s'] = self.comp_c, self.comp_s
-            view['i_max'] = self.i_max
-            view['levels'] = self.levels
-
-            res = hitglob.map(self.frames[chc][1])
-            res.wait()
-#           glob_ana = res.result
-            print('Global analysis finished. Took %i seconds.' % (res.wall_time))
-
-            cmpdist = pd.concat(res.result())
-
+        print('Global analysis finished.')
 #       quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
 #       self.levels = np.percentile(hitdist, 100 * quants)
 
@@ -1057,49 +1052,54 @@ class ParseSingleShots(CommonMethods):
         print("Otsu's threshold used: ", self.thr)
 
 #       del hitdist, cmpdist
-        if self.parallel: cl.purge_results('all')
+#        if self.parallel: cl.purge_results('all')
 
-        if view is None:
-            print('Starting hit detection in serial execution.')
-            pbar = ProgressBar().start()
-            pbar.maxval = self.dimd
+#         if view is None:
+#             print('Starting hit detection in serial execution.')
+#             pbar = ProgressBar().start()
+#             pbar.maxval = self.dimd
+# 
+#             for i, (pid, img) in enumerate(self.frames):
+#                 locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, thr=self.thr,
+#                                 levels=self.levels, imax=self.i_max, dilate=True))
+#                 pbar.update(i)
+# 
+#             self.sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)}, dtype=np.float_)
+#             self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)}, dtype=np.float_)
 
-            for i, (pid, img) in enumerate(self.frames):
-                locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, thr=self.thr,
-                                levels=self.levels, imax=self.i_max, dilate=True))
-                pbar.update(i)
+        executor = ProcessPoolExecutor()
+        print('Starting hit detection in parallel mode running on %i cores.' % executor._max_workers)
+        levels = self.levels
+        thr = self.thr
 
-            self.sgl = pd.Panel({i: r[0] for i,r in enumerate(locl_ana)}, dtype=np.float_)
-            self.mlt = pd.Panel({i: r[1] for i,r in enumerate(locl_ana)}, dtype=np.float_)
-
-        else:
-            print('Starting hit detection in parallel mode running on %i cores.' % len(view))
-            view['levels'] = self.levels
-            view['thr'] = self.thr
-
-            ind = np.arange(self.dimd)
-            no_chunks = self.dimd // 1200
-            chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
-            
-            for i, chunk in enumerate(chunks):
-                id, ar = self.frames[chunk]
-                res = hitfind.map(ar)
-                res.wait()
-
+        ind = np.arange(self.dimd)
+        no_chunks = self.dimd // 1200
+        chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
+        
+        for i, chunk in enumerate(chunks):
+            id, ar = self.frames[chunk]
+            arlen = len(ar)
+#              res = hitfind.map(ar)
+#              res.wait()
+            e = executor.map(hitfind, ar, arlen*[self.comp_c], arlen*[self.comp_s],
+                                         arlen * [self.levels], arlen * [self.thr],
+                                         arlen * [self.i_max])
 #               locl_ana = res.result
-                sgl = pd.Panel({i: r[0] for i,r in enumerate(res.result())}, dtype=np.float_)
-                mlt = pd.Panel({i: r[1] for i,r in enumerate(res.result())}, dtype=np.float_)
+#           sgl = pd.Panel({i: r[0] for i,r in enumerate(e)}, dtype=np.float_)
+            mlt = pd.Panel({i: r[1] for i,r in enumerate(e)}, dtype=np.float_)
+#           import ipdb
+#           ipdb.set_trace()
+#           sgl.items, mlt.items = id, id 
+            mlt.items = id 
 
-                sgl.items, mlt.items = id, id 
-
-                with pd.HDFStore('%s-ss.h5' % self.hdf) as store:
-                    store['sgl%02d' % i] = sgl
-                    store['mlt%02d' % i] = mlt
+            with pd.HDFStore('%s-ss.h5' % self.hdf) as store:
+#               store['sgl%02d' % i] = sgl
+                store['mlt%02d' % i] = mlt
 #                   print(store.get('mlt%02d' % i ) )
-                
-                print('%i images processed. Last chunk took %.1f minutes.' % (chunk[-1] + 1, (res.wall_time / 60)))
-                cl.purge_results('all')
-
+            
+            print('%i images processed.' % (chunk[-1] + 1))
+#                cl.purge_results('all')
+        executor.shutdown()
 #       del self.frames
 
     def read_data(self):
@@ -1169,17 +1169,17 @@ class ParseSingleShots(CommonMethods):
             if self.parallel:
                 mlt = pd.concat([store.get(k) for k in store 
                                               if k.startswith('/mlt')])
-                sgl = pd.concat([store.get(k) for k in store 
-                                              if k.startswith('/sgl')])
+#               sgl = pd.concat([store.get(k) for k in store 
+#                                             if k.startswith('/sgl')])
                 [store.remove(k) for k in store]
 
                 store['mlt'] = mlt
-                store['sgl'] = sgl
+#               store['sgl'] = sgl
                 self.pid_ar = mlt.items
 
             else:
                 store['mlt'] = self.mlt
-                store['sgl'] = self.sgl
+#               store['sgl'] = self.sgl
                 self.pid_ar = self.mlt.items
 
             store['header'] = header[self.cols]
@@ -1193,8 +1193,9 @@ class ParseSingleShots(CommonMethods):
             else:
                 index = self.pid_ar
 
-            store.sgl.items, store.mlt.items = index, index
-            if self.parallel: cl.purge_everything()
+#           store.sgl.items, store.mlt.items = index, index
+            store.mlt.items = index
+#           if self.parallel: cl.purge_everything()
 
 #==============================================================================
 
