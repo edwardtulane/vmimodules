@@ -131,7 +131,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
     hit_col = ['y_cntr', 'x_cntr']
     sgl_cols = ['x_wid', 'y_wid', 'count']
     prop_cols = ['y_gau', 'x_gau', 'y_sig', 'x_sig', 'qmax',
-                ]
+                 'ls_rank']
 
 #   levels = np.linspace(0,1, no_levels)
     levels = levels[::-1]
@@ -218,7 +218,7 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
             else: res = float(res)
 
             prop_mlt.append( (y_gau + p[0], x_gau + p[1], sig_y, sig_x, qmax,
-                             ) )
+                              rank) )
 
 
     assert len(prop_mlt) == np.sum([v[2] for v in prop_sgl])

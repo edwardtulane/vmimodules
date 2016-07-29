@@ -937,7 +937,7 @@ class ParseSingleShots(CommonMethods):
                  meta_dict={}, singleshot_dict={}, time_dict={}):
 #       global header_keys, meta_keys, frame_keys, time_keys, mm_to_fs
 
-        vmi_dir = vmimodules.conf.vmi_dir
+#       vmi_dir = vmimodules.conf.vmi_dir
         self.date, self.setup = pd.Timestamp(date), setup
         self.access = pd.Timestamp(time.asctime())
         self.seqNo, self.inx = seqNo, inx
@@ -1029,10 +1029,12 @@ class ParseSingleShots(CommonMethods):
             pbar = ProgressBar().start()
             pbar.maxval = 100
 
-            for i, img in enumerate(self.frames[chc]):
+            for i, img in enumerate(self.frames[chc][1]):
                 glob_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s,
                                 levels=self.levels, imax=self.i_max, dilate=True, global_analysis=True))
                 pbar.update(i)
+
+            cmpdist = pd.concat(glob_ana)
                 
         else:
             self.parallel = True
@@ -1046,8 +1048,7 @@ class ParseSingleShots(CommonMethods):
 #           glob_ana = res.result
             print('Global analysis finished. Took %i seconds.' % (res.wall_time))
 
-#       hitdist = pd.concat([v[0] for v in glob_ana])
-        cmpdist = pd.concat(res.result)
+            cmpdist = pd.concat(res.result())
 
 #       quants = np.linspace(0, 1, self.no_levels + 1)[:-1]
 #       self.levels = np.percentile(hitdist, 100 * quants)
@@ -1056,14 +1057,14 @@ class ParseSingleShots(CommonMethods):
         print("Otsu's threshold used: ", self.thr)
 
 #       del hitdist, cmpdist
-        cl.purge_results('all')
+        if self.parallel: cl.purge_results('all')
 
         if view is None:
             print('Starting hit detection in serial execution.')
             pbar = ProgressBar().start()
             pbar.maxval = self.dimd
 
-            for i, img in enumerate(self.frames):
+            for i, (pid, img) in enumerate(self.frames):
                 locl_ana.append(hd.detect_hits_img(img, self.comp_c, self.comp_s, thr=self.thr,
                                 levels=self.levels, imax=self.i_max, dilate=True))
                 pbar.update(i)
@@ -1077,7 +1078,7 @@ class ParseSingleShots(CommonMethods):
             view['thr'] = self.thr
 
             ind = np.arange(self.dimd)
-            no_chunks = self.dimd / 1200
+            no_chunks = self.dimd // 1200
             chunks = np.split(ind, 1200 * (np.arange(no_chunks) + 1))
             
             for i, chunk in enumerate(chunks):
@@ -1086,8 +1087,8 @@ class ParseSingleShots(CommonMethods):
                 res.wait()
 
 #               locl_ana = res.result
-                sgl = pd.Panel({i: r[0] for i,r in enumerate(res.result)}, dtype=np.float_)
-                mlt = pd.Panel({i: r[1] for i,r in enumerate(res.result)}, dtype=np.float_)
+                sgl = pd.Panel({i: r[0] for i,r in enumerate(res.result())}, dtype=np.float_)
+                mlt = pd.Panel({i: r[1] for i,r in enumerate(res.result())}, dtype=np.float_)
 
                 sgl.items, mlt.items = id, id 
 
@@ -1193,7 +1194,7 @@ class ParseSingleShots(CommonMethods):
                 index = self.pid_ar
 
             store.sgl.items, store.mlt.items = index, index
-            cl.purge_everything()
+            if self.parallel: cl.purge_everything()
 
 #==============================================================================
 
