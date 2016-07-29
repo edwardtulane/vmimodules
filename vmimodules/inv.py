@@ -128,7 +128,48 @@ class Inverter(object):
                             np.loadtxt('MXsim.dat', delimiter=',')
                            )
         os.chdir(cur_path)
-        return leg, invmap, arr - res
+        return leg, invmap, res
+
+    def bootstrapMaxEnt(self, arr, its=100, quants=[5, 50, 95]):
+        """Bootstrap the inverted image with the Maximum Entropy method to
+           obtain error estimates.
+
+        Parameters
+        ----------
+        arr : array, one quadrant of the image to be inverted
+        its : int, number of iterations for the bootstrapping
+        quants : list of integers between 0 and 100, quantiles for the 
+                 np.percentile function
+
+        Returns
+        -------
+        legs : pd.Panel, radial distributions with the quantiles on the items
+               axis
+        invs : pd.Panel, inverted images with quantiles on the items axis
+
+        """
+
+        leg, inv, res = self.invertMaxEnt(arr)
+        rs = (arr-res).ravel()
+
+        invs = dict()
+        legs = dict()
+
+        for i in range(its):
+            chc = np.random.choice(rs, rs.shape, )
+            chc.shape = img.shape
+            arnew = res + chc
+            legs[i], invs[i], _ = inv.invertMaxEnt(arnew)
+
+        legs = pd.Panel(legs)
+        invs = pd.Panel(invs)
+
+        legs = pd.Panel({k: legs.apply(np.percentile, axis='items', q=k) 
+                         for k in quants})
+        invs = pd.Panel({k: invs.apply(np.percentile, axis='items', q=k) 
+                         for k in quants})
+        
+        return legs, invs
 
     def invertMaxLeg(self, arr, T=0, P=2):
         import shutil as sh
@@ -155,7 +196,7 @@ class Inverter(object):
                             np.loadtxt('MEXsim.dat', delimiter=',')
                            )
         os.chdir(cur_path)
-        return leg, invmap, arr - res
+        return leg, invmap, res
 
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
@@ -179,7 +220,7 @@ class Inverter(object):
         leg *= self.__dim2
         pbsx = pbsx.ravel()
         inv_map = self.pbsx2fold(pbsx)
-        res = arr - self.pbsx2ab(pbsx).ravel()
+        res = self.pbsx2ab(pbsx).ravel() # arr - self.pbsx2ab(pbsx).ravel()
         res.shape = (self.dim, self.polN)
         return leg, inv_map, res
 
