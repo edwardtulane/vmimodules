@@ -10,6 +10,10 @@ import sys, os
 
 import numpy as np
 import scipy as sp
+import pandas as pd
+
+from concurrent.futures import ProcessPoolExecutor
+
 import scipy.special as spc
 import scipy.integrate as integ
 import scipy.signal as sig
@@ -21,6 +25,16 @@ from . import proc as vmp
 from . import mod_home
 # mod_home = vmimodules.conf.mod_home
 stor_dir = os.path.join(mod_home, 'storage')
+
+def lambda_inv(res, rs):
+    inv = Inverter(dryrun=True)
+    chc = np.random.choice(rs, rs.shape, )
+    chc.shape = res.shape
+    arnew = res + chc
+    leg, _, _ = inv.invertMaxEnt(arnew)
+    leg[1:] /= leg[0]
+    return pd.DataFrame(leg)
+
 
 class Inverter(object):
     """
@@ -130,7 +144,7 @@ class Inverter(object):
         os.chdir(cur_path)
         return leg, invmap, res
 
-    def bootstrapMaxEnt(self, arr, its=100, quants=[5, 50, 95]):
+    def bootstrapMaxEnt(self, arr, its=100, quants=[2.5, 25, 50, 75, 97.5]):
         """Bootstrap the inverted image with the Maximum Entropy method to
            obtain error estimates.
 
@@ -149,27 +163,22 @@ class Inverter(object):
 
         """
 
+
         leg, inv, res = self.invertMaxEnt(arr)
         rs = (arr-res).ravel()
 
-        invs = dict()
-        legs = dict()
+#       executor = ProcessPoolExecutor()
+        with ProcessPoolExecutor() as executor:
+            legs = pd.Panel({i: v for i,v in enumerate(executor.map(
+                       lambda_inv, its*[res], its*[rs]))})
+#       executor.shutdown()
 
-        for i in range(its):
-            chc = np.random.choice(rs, rs.shape, )
-            chc.shape = img.shape
-            arnew = res + chc
-            legs[i], invs[i], _ = inv.invertMaxEnt(arnew)
 
-        legs = pd.Panel(legs)
-        invs = pd.Panel(invs)
-
-        legs = pd.Panel({k: legs.apply(np.percentile, axis='items', q=k) 
+        legs_out = pd.Panel({k: legs.apply(np.percentile, axis='items', q=k) 
                          for k in quants})
-        invs = pd.Panel({k: invs.apply(np.percentile, axis='items', q=k) 
-                         for k in quants})
-        
-        return legs, invs
+        legs_out = legs_out.join(pd.Panel(dict(std=legs.std(0, ddof=1))))
+
+        return legs_out, inv
 
     def invertMaxLeg(self, arr, T=0, P=2):
         import shutil as sh
