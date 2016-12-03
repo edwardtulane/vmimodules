@@ -410,13 +410,14 @@ def centroid_pimms(kv, lims, small):
     lo,hi = lims
     c, t, t_diff, s = map_hits3d(v.values, lo, hi, 3)
 
-    centers = pd.DataFrame(c, columns=['t_av', 'xc', 'yc'])
+    centers = pd.DataFrame(c, columns=['t_av', 'xc', 'yc']).astype(np.float16)
     sizes = pd.Series(s, name='sizes')
     times = pd.Series(t, name='t')
     t_diff = pd.Series(t_diff, name='t_diff')
                         
     df = centers.join(
-            pd.DataFrame([sizes, times, t_diff]).T)
+            pd.DataFrame([sizes, times, t_diff]).T.astype(np.int16)
+            )
 
     di = distance.pdist(df.loc[:,['xc','yc','t_av']])
     di_sq = distance.squareform(di)
