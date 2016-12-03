@@ -6,6 +6,10 @@ import numpy as np, scipy as sp
 import pandas as pd
 import scipy.ndimage as im
 
+from scipy.spatial import distance
+
+from .hitC import map_hits3d
+
 
 def comp_hist(img, c, s):
     """
@@ -399,3 +403,35 @@ def bin_hits_polar(hits, dim_hit, rN, phiN):
 
     return img
 
+#==============================================================================
+
+def centroid_pimms(kv, lims, small):
+    k,v = kv
+    lo,hi = lims
+    c, t, t_diff, s = map_hits3d(v.values, lo, hi, 3)
+
+    centers = pd.DataFrame(c, columns=['t_av', 'xc', 'yc'])
+    sizes = pd.Series(s, name='sizes')
+    times = pd.Series(t, name='t')
+    t_diff = pd.Series(t_diff, name='t_diff')
+                        
+    df = centers.join(
+            pd.DataFrame([sizes, times, t_diff]).T)
+
+    di = distance.pdist(df.loc[:,['xc','yc','t_av']])
+    di_sq = distance.squareform(di)
+
+    unus = np.ones_like(di_sq, dtype=np.bool_)
+    trimask = np.triu(unus,k=1)
+
+    # Filter on the tridiagonal distance matrix and duplicate detection
+    di_sq[~trimask] = 100.
+    sm = np.where(di_sq < small)
+
+    dups = df.loc[:,['xc','yc']].duplicated()
+
+    neigh = np.ones_like(dups, dtype=np.bool_)
+    neigh[sm[1]] = False
+    mask = neigh & ~dups & (df.sizes > 1.)
+    
+    return k, df[mask]
