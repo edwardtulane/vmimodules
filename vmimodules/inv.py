@@ -131,7 +131,7 @@ class Inverter(object):
 
         np.savetxt('tmp_arr' , arr)
 
-        os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
+        os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -I70 -DV0.5 tmp_arr' % (T, P))
 
         if os.system('grep "Time" MaxAbel.log') >0:
             raise Exception('Maximum Entropy reconstruction failed!')
