@@ -1173,12 +1173,13 @@ class ParseSingleShots(CommonMethods):
 #                                             if k.startswith('/sgl')])
                 [store.remove(k) for k in store]
 
-                store['mlt'] = mlt
+#               store['mlt'] = mlt
 #               store['sgl'] = sgl
                 self.pid_ar = mlt.items
 
             else:
-                store['mlt'] = self.mlt
+#               store['mlt'] = self.mlt
+                mlt = self.mlt
 #               store['sgl'] = self.sgl
                 self.pid_ar = self.mlt.items
 
@@ -1194,7 +1195,10 @@ class ParseSingleShots(CommonMethods):
                 index = self.pid_ar
 
 #           store.sgl.items, store.mlt.items = index, index
-            store.mlt.items = index
+            mlt.items = index
+            mlt_df = mlt.swapaxes(0,2).swapaxes(1,2).to_frame()
+#           store.remove('mlt')
+            store['mlt'] = mlt_df
 #           if self.parallel: cl.purge_everything()
 
 #==============================================================================
