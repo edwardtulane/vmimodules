@@ -12,6 +12,8 @@ TODO: deliberately delete commented blocks
 
 """
 
+import os
+
 import numpy as np
 import scipy as sp
 
@@ -19,6 +21,10 @@ import math
 import scipy.signal as sig
 import scipy.ndimage.interpolation as ndipol
 import matplotlib.pyplot as pl
+
+from . import mod_home, global_dens, vmi_dir
+# mod_home = vmimodules.conf.mod_home
+stor_dir = os.path.join(mod_home, 'storage')
 
 def rawread(filename):
     """
@@ -352,6 +358,36 @@ def gen_qrs_grid(radius, radN, polN, alpha):
     y_coord = rad_coord * np.cos(pol_coord) + offs[:, None]
 
     return [radii, y_coord * alpha + radius, x_coord * alpha + radius]
+
+def gen_corr_qrs_grid(radius, radN, polN, alpha, Up, Ip):
+
+    from math import sqrt
+    from scipy.interpolate import splrep, splev
+
+    Ip /= 27.211
+    Up /= 27.211
+    v0 = 2 * sqrt(Up)
+    
+    vt = np.load(os.path.join(stor_dir, 'vt.npy'))
+    sint = np.load(os.path.join(stor_dir, 'sint.npy'))
+    dt0prime = np.load(os.path.join(stor_dir, 'dt0p.npy'))
+    
+    vcorr = np.sqrt(vt ** 2 -(2 * Ip * dt0prime)/v0)
+
+    tck = splrep(vcorr[::-1], sint[::-1])
+    vmax = 1.0 * vcorr.max()
+    
+    radii = -np.linspace(-vmax, +vmax, radN)
+#   radii = np.abs(radii)
+    offs = splev(np.abs(radii), tck)
+    offs = np.sign(-radii) * offs
+
+    angles = np.linspace(0, 2*np.pi, polN)
+    pol_coord, rad_coord = np.meshgrid(angles, radii)
+    x_coord = rad_coord * np.sin(pol_coord)
+    y_coord = rad_coord * np.cos(pol_coord) + offs[:, None]
+
+    return [radii * v0, y_coord * alpha + radius, x_coord * alpha + radius]
 
 
 def plot_circles(axes, x_cntr, y_cntr, fro=5, to=120, Ncirc=7):

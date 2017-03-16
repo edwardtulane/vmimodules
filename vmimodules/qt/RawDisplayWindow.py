@@ -5,7 +5,9 @@ Created on Wed Jun  4 11:01:45 2014
 @author: krecinic
 """
 
-viewerpath='/home/brausse/program/lab/RawViewer'
+import os 
+
+viewerpath = os.path.dirname(os.path.realpath(__file__))
 
 from PyQt4 import QtGui, QtCore 
 
@@ -23,7 +25,7 @@ sys.path.append(viewerpath)
 import pdb
 import pylab as pyl
 import numpy as np
-import vmiproc as vmp
+import vmimodules.proc as vmp
 import scipy.ndimage as ndim
 
 class RawDisplayWindow(QtGui.QDialog):
@@ -62,7 +64,7 @@ class RawDisplayWindow(QtGui.QDialog):
         self.rotateDegree = 0.0
         
         self.invert = False
-        self.M,self.Mc = vmp.iniBasex(viewerpath+'/')
+        self.M,self.Mc = vmp.iniBasex(viewerpath+'/../storage/')
         
         self.cmname = 'jet'
         self.cmnorm = False
