@@ -10,6 +10,10 @@ import sys, os
 
 import numpy as np
 import scipy as sp
+import pandas as pd
+
+from concurrent.futures import ProcessPoolExecutor
+
 import scipy.special as spc
 import scipy.integrate as integ
 import scipy.signal as sig
@@ -21,6 +25,16 @@ from . import proc as vmp
 from . import mod_home
 # mod_home = vmimodules.conf.mod_home
 stor_dir = os.path.join(mod_home, 'storage')
+
+def lambda_inv(res, rs, H):
+    inv = Inverter(dryrun=True)
+    chc = np.random.choice(rs, rs.shape, )
+    chc.shape = res.shape
+    arnew = res + chc
+    leg, _, _ = inv.invertMaxEnt(arnew, H=H, fine_leg=False)
+    leg[1:] /= leg[0]
+    return pd.DataFrame(leg)
+
 
 class Inverter(object):
     """
@@ -103,7 +117,7 @@ class Inverter(object):
 
 #==============================================================================
 
-    def invertMaxEnt(self, arr, T=0, P=2):
+    def invertMaxEnt(self, arr, T=0, P=2, H=0, fine_leg=False):
         import shutil as sh
         arr_path = os.path.join(mod_home, 'inv', 'bin')
         cur_path = os.path.abspath(os.curdir)
@@ -117,20 +131,61 @@ class Inverter(object):
 
         np.savetxt('tmp_arr' , arr)
 
-        os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
+        os.system('./MEVIR.elf -S1 -R2 -T%d -P%d -H%d -I70 -DV0.5 tmp_arr' % (T, P, H))
 
         if os.system('grep "Time" MaxAbel.log') >0:
             raise Exception('Maximum Entropy reconstruction failed!')
 
+        if fine_leg: 
+            leg_type = '2'
+        else: 
+            leg_type = ''
+
         os.system('sed -e "s/D/e/g" -i MXLeg.dat')
-        leg, invmap, res = (np.loadtxt('MXLeg.dat').T[1:], 
+        leg, invmap, res = (np.loadtxt('MXLeg%s.dat' % leg_type).T[1:], 
                             np.loadtxt('MXmap.dat', delimiter=','), 
                             np.loadtxt('MXsim.dat', delimiter=',')
                            )
         os.chdir(cur_path)
-        return leg, invmap, arr - res
+        return leg, invmap, res
 
-    def invertMaxLeg(self, arr, T=0, P=2):
+    def bootstrapMaxEnt(self, arr, its=100, quants=[2.5, 25, 50, 75, 97.5], H=0):
+        """Bootstrap the inverted image with the Maximum Entropy method to
+           obtain error estimates.
+
+        Parameters
+        ----------
+        arr : array, one quadrant of the image to be inverted
+        its : int, number of iterations for the bootstrapping
+        quants : list of integers between 0 and 100, quantiles for the 
+                 np.percentile function
+
+        Returns
+        -------
+        legs : pd.Panel, radial distributions with the quantiles on the items
+               axis
+        invs : pd.Panel, inverted images with quantiles on the items axis
+
+        """
+
+
+        leg, inv, res = self.invertMaxEnt(arr, H=H)
+        rs = (arr-res).ravel()
+
+#       executor = ProcessPoolExecutor()
+        with ProcessPoolExecutor() as executor:
+            legs = pd.Panel({i: v for i,v in enumerate(executor.map(
+                       lambda_inv, its*[res], its*[rs], its*[H]))})
+#       executor.shutdown()
+
+
+        legs_out = pd.Panel({k: legs.apply(np.percentile, axis='items', q=k) 
+                         for k in quants})
+        legs_out = legs_out.join(pd.Panel(dict(std=legs.std(0, ddof=1))))
+
+        return legs_out, inv
+
+    def invertMaxLeg(self, arr, T=0, P=2, H=0):
         import shutil as sh
         arr_path = os.path.join(mod_home, 'inv', 'bin')
         cur_path = os.path.abspath(os.curdir)
@@ -144,7 +199,7 @@ class Inverter(object):
 
         np.savetxt('tmp_arr', arr, fmt='%i')
 
-        os.system('./Meveler2beta.elf -S1 -R2 -T%d -P%d -I70 tmp_arr' % (T, P))
+        os.system('./Meveler2beta.elf -S1 -R2 -T%d -P%d -H%d -I70 tmp_arr' % (T, P, H))
 
         if os.system('grep "Time" Meveler.log') >0:
             raise Exception('Maximum Entropy reconstruction failed!')
@@ -155,7 +210,7 @@ class Inverter(object):
                             np.loadtxt('MEXsim.dat', delimiter=',')
                            )
         os.chdir(cur_path)
-        return leg, invmap, arr - res
+        return leg, invmap, res
 
     def invertBasex(self, arr):
         bsx, res = vmp.Basex(arr, 10, 0, self.__M1, self.__M2,
@@ -179,7 +234,7 @@ class Inverter(object):
         leg *= self.__dim2
         pbsx = pbsx.ravel()
         inv_map = self.pbsx2fold(pbsx)
-        res = arr - self.pbsx2ab(pbsx).ravel()
+        res = self.pbsx2ab(pbsx).ravel() # arr - self.pbsx2ab(pbsx).ravel()
         res.shape = (self.dim, self.polN)
         return leg, inv_map, res
 

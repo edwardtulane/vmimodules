@@ -5,6 +5,8 @@ cimport numpy as np
 from libc.math cimport exp
 from scipy.linalg.cython_blas cimport dger
 
+from scipy.ndimage import label, center_of_mass, sum, minimum, maximum
+
 cdef extern from "math.h":
     double exp(double x)
     int round(double x)
@@ -183,3 +185,40 @@ def quadC(pars, int dim):
         gss[y,x] = gss[y,x] + 1
 
     return np.asarray(gss)
+
+#===============================================================================
+
+# PIMMS routines
+
+strc = np.ones([3,3,3])
+
+def map_hits3d(int[:,:] hits, 
+               int tlo, int thi, 
+               int div): 
+
+    cdef:
+        int dim = (thi - tlo) // div
+        int[:,:,:] counts = np.zeros([dim, 324, 324], dtype=np.int32)
+        int[:,:,:] times  = counts.copy()
+        int i, x, y, t, t_ind
+                                                
+    for i in range(hits.shape[0]):
+        x, y = hits[i,0], hits[i,1]
+        t = hits[i,2]
+        t_ind = (t - 1100) // div
+
+        if (t_ind < dim) & (t_ind > 0):
+            counts[t_ind, x, y] = counts[t_ind, x, y] + 1
+            times [t_ind, x, y] = times [t_ind, x, y] + t
+
+    lab, ind = label(np.array(counts), structure=strc)
+
+    ind = np.arange(ind) + 1
+                                                                            
+    sizes = sum(np.array(counts), labels=lab, index=ind)
+    tof   = minimum(np.array(times), labels=lab, index=ind)
+    t_max = maximum(np.array(times), labels=lab, index=ind)
+    cents = center_of_mass(np.array(counts), labels=lab, index=ind)
+
+    return cents, tof, (t_max - tof), sizes 
+
