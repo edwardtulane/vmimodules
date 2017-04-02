@@ -38,7 +38,7 @@ from . import hitdet as hd
 from . import inv as vminv
 from .vis import Plotter
 import seaborn.apionly as sb
-sb.set_context('talk')
+# sb.set_context('talk') # don't do this!
 
 try:
     import bottleneck as bn

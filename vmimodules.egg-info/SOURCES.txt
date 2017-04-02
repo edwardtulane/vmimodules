@@ -1,5 +1,6 @@
 setup.py
 vmimodules/__init__.py
+vmimodules/colors.py
 vmimodules/inv.py
 vmimodules/proc.py
 vmimodules/vis.py
