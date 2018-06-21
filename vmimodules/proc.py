@@ -54,10 +54,12 @@ def read_singleshots(fname):
     arr = np.memmap(fname, dtype=np.int32,mode='r')
     x_dim, y_dim, seqlen = arr[0:3]
     slice_len = (x_dim * y_dim) / 4    # 8 to 32 bit conversion
+    slice_len = int(slice_len)
     ids = np.zeros(seqlen, dtype=np.int32)
     ss_arr = np.zeros((seqlen, y_dim, x_dim), dtype=np.int8)
     
     for i in range(seqlen):
+        i = int(i)
         ids[i] = arr[3 + i * (slice_len + 1)]
         int8view = arr[3 + 1 + i * (slice_len + 1) 
                       :3 + (i+1) * (slice_len + 1)].view(np.int8)
@@ -345,6 +347,8 @@ def gen_polar_back_transform(radius, polN):
     x,y = np.meshgrid(x, x)
     theta = ((np.arctan2(x,y) / np.pi) + 1) * (polN-1)
     r = np.sqrt(x**2 + y**2)
+
+    return r, theta
 
 def gen_qrs_grid(radius, radN, polN, alpha):
     """
