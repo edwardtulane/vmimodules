@@ -110,9 +110,9 @@ def prop_vec(N, lam, h):
     frac = num / den.astype(np.float_)
     lam = lam[:, None]
     phi = frac ** lam
-    phi_diag = np.zeros((lam.shape[0] * lam.shape[0], N + 1))
+    phi_diag = np.zeros((lam.shape[0] * lam.shape[0], int(N + 1)))
     phi_diag[::lam.shape[0] + 1,:] = phi
-    phi_diag.shape = (lam.shape[0], lam.shape[0], N + 1)
+    phi_diag.shape = (lam.shape[0], lam.shape[0], int(N + 1))
     lam1 = lam + 1
     gam = (2 * den / lam1) * (1 - frac ** lam1)
     gam = -1 * h[:, None] * gam
@@ -192,12 +192,12 @@ def project_polar(img, r_max, sigma):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 75
-    sigma = 2.00
-    n_even = 8
+    r_max = 300
+    sigma = 1.00
+    n_even = 6
     n_odd = 0
 
-    blowup = 2
+    blowup = 4
 
     store_path = os.path.join(sys.path[0], 'storage')
     ext = '-' + str(r_max)+'-'+str(n_even)

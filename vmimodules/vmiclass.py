@@ -302,14 +302,14 @@ class PolarImg(np.ndarray):
         self.drad, self.dphi = frame.shape
 
     def quadrants(self):
-        quad_phi = (self.dphi - 1) / 4
+        quad_phi = (self.dphi - 1) // 4
         qu = [self[:,0:quad_phi+1], self[:,2*quad_phi:quad_phi-1:-1],
               self[:,2*quad_phi:3*quad_phi+1], self[:,4*quad_phi:3*quad_phi-1:-1]]
 
         return np.array(qu)
 
     def get_cos2(self, qsel=[0,1,2,3]):
-        qu = self.quadrants()
+        qu = self.quadrants()[qsel]
         qu = qu.mean(0)
         th = np.linspace(0, np.pi * 0.5, qu.shape[1])
         costh = np.cos(th)

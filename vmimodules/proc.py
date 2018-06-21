@@ -486,7 +486,9 @@ def compose(qu):
     cmps = np.zeros((np.asarray(qu[0].shape) * 2 - 1))
     cntry = qu[0].shape[0] - 1
     cntrx = qu[0].shape[1] - 1
-    cmps[cntry:, cntrx:], cmps[cntry:,cntrx::-1] = qu[0],  qu[1]
+    cmps[cntry:,cntrx::-1] = qu[1]
+    cmps[cntry:, cntrx:]   = qu[0]
+#   cmps[cntry:, cntrx:], cmps[cntry:,cntrx::-1] = qu[0],  qu[1]
     cmps[cntry::-1,cntrx::-1], cmps[cntry::-1,cntrx:] = qu[2], qu[3]
     return cmps
 
