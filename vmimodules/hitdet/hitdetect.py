@@ -76,7 +76,7 @@ def seg_lev(img, levels):
     return img_seg
 
 
-def detect_hits_patch(img, levels, struct):
+def detect_hits_patch(img, levels, struct, debug=False):
     """
     Inner peak finding loop for the isolated patches.
 
@@ -92,6 +92,9 @@ def detect_hits_patch(img, levels, struct):
 
     for img in seg:
         lb, cn = im.label(img, structure=struct)
+
+        if cn > 100 and debug: 
+            print('Iterating over %4i features in the current layer ' % cn)
 
         for i in range(cn):
             slc = null_map.copy()
@@ -117,7 +120,8 @@ def detect_hits_patch(img, levels, struct):
 
 
 def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
-                    imax=0, dilate=True, global_analysis=False):
+                    imax=0, dilate=True, global_analysis=False,
+                    debug=False):
     """
     Outer peak finding loop for an entire VMI image.
 
@@ -195,8 +199,11 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
         patch_strpd[~ma] = -1.
 
 
-        hits_lc = detect_hits_patch(patch_strpd, levels, struct)
+        hits_lc = detect_hits_patch(patch_strpd, levels, struct,
+                                    debug=debug)
         prop_sgl.append( (x_wid, y_wid, len(hits_lc)) )
+
+        if debug: print("Number of peaks in patch ", "%3i"%i, ": ", len(hits_lc))
 
         for v in hits_lc:
             hit = np.array([patch[l] for l in zip(*v) if patch[l] > 0])
@@ -232,6 +239,8 @@ def detect_hits_img(img, comp_cntr, comp_strgth, levels, thr=None,
     dups = hits_mlt.duplicated()
     prop_mlt = pd.DataFrame(prop_mlt, columns=prop_cols)
     hits_mlt = pd.concat([hits_mlt, prop_mlt], axis=1)
+
+    if debug: print("I made it here.")
 
     # Single-level hits
     patches = pd.DataFrame(prop_sgl, columns=sgl_cols)
