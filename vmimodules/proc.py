@@ -40,6 +40,20 @@ def rawread(filename):
 
     return M
 
+def read_labview(filename):
+    """
+    Read the .bin files that the LabView program from the He droplet experiment
+    writes.
+    """
+    arr_bin_file = np.fromfile(filename, dtype='>d') # LV writes binary data in
+                                                     # big-endian format!
+
+    intens, arr = arr_bin_file[0], arr_bin_file[1:] 
+
+    arr = arr.reshape(2048, 2048)
+
+    return arr
+
 def read_singleshots(fname):
     """Read the pulse ids and images from a single shot file.
        Parameters

@@ -52,9 +52,9 @@ class Inverter(object):
             self.rf = np.load(stor_dir + '/rf' + self.__ext + '.npy')
 #           self.btb = self.bs.T.dot(self.bs)
             self.FtF = np.load(stor_dir + '/FtF' + self.__ext + '.npy')
-            self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
-            self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
-                    self.__M2.T, self.__M2),
+#           self.__M1, self.__M2 = vmp.iniBasex(stor_dir + '/')
+#           self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
+#                   self.__M2.T, self.__M2),
 
             self.lvals = (n_even / 2) + 1
             self.n_funs = self.bs.shape[1] / self.lvals
@@ -131,7 +131,10 @@ class Inverter(object):
 
         np.savetxt('tmp_arr' , arr)
 
-        os.system('./MEVIR.elf -S2 -R2 -T%d -P%d -H%d -I70 -DV0.5 tmp_arr' % (T, P, H))
+        if 'WSLENV' in os.environ:
+            os.system('qemu-i386 MEVIR.elf -S2 -R2 -T%d -P%d -H%d -I70 -DV0.5 tmp_arr' % (T, P, H))
+        else:
+            os.system('./MEVIR.elf -S2 -R2 -T%d -P%d -H%d -I70 -DV0.5 tmp_arr' % (T, P, H))
 
         if os.system('grep "Time" MaxAbel.log') >0:
             raise Exception('Maximum Entropy reconstruction failed!')

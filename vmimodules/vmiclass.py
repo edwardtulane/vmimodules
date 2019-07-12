@@ -80,10 +80,12 @@ class RawImage(np.ndarray):
     -- crop_square: cuts out a square and may be supplied with the rotation angle
     """
     
-    def __new__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[]):
+    def __new__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[],
+                labview=False):
 
         if type(file) is str:
-            raw = vmp.rawread(file)
+            if labview: raw = vmp.read_labview(file)
+            else:       raw = vmp.rawread(file)
         else:
             raw = file
 
@@ -92,10 +94,16 @@ class RawImage(np.ndarray):
         else:
             pass
 
-        return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
-                                  buffer=raw.copy(), order='C')
 
-    def __init__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[]):
+        if labview:
+            return np.ndarray.__new__(self, shape=raw.shape, dtype='>d',
+                                    buffer=raw.copy(), order='C').astype(np.float_)
+        else:
+            return np.ndarray.__new__(self, shape=raw.shape, dtype='int32',
+                                    buffer=raw.copy(), order='C')
+
+    def __init__(self, file=[], xcntr=0, ycntr=0, radius=0, hotspots=[],
+                 labview=False):
 
         self.cx, self.cy = xcntr, ycntr
         self.rad_sq = radius
