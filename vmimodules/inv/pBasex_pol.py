@@ -10,6 +10,8 @@ from __future__ import print_function
 import sys, os
 sys.path.insert(0, os.path.realpath(os.path.pardir))
 
+from glob import glob
+
 import numpy as np
 import scipy.special as legfuns
 
@@ -17,7 +19,9 @@ from scipy import integrate as integ
 import scipy.interpolate as intpol
 
 import ctypes
-lib = ctypes.CDLL('./abel.cpython-35m-x86_64-linux-gnu.so')
+dll = sorted(glob('abel.cpython*so'))
+dll = dll[-1]
+lib = ctypes.CDLL('./%s' % dll)
 
 kpol = lib.kernel_pol
 kpol.restype = ctypes.c_double
@@ -96,7 +100,7 @@ def abel_integrate(radN, polN, rk, sig, l):
 if __name__ == '__main__':
 #    pass
 #else:
-    r_max = 180
+    r_max = 150
     polN = 257
     sigma = 2.00
     n_even = 2

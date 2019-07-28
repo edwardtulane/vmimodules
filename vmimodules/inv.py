@@ -56,9 +56,9 @@ class Inverter(object):
 #           self.__MTM1, self.__MTM2 = np.dot(self.__M1.T, self.__M1), np.dot(
 #                   self.__M2.T, self.__M2),
 
-            self.lvals = (n_even / 2) + 1
-            self.n_funs = self.bs.shape[1] / self.lvals
-            self.polN = self.ab.shape[1] / self.dim
+            self.lvals = (n_even // 2) + 1                # make sure these
+            self.n_funs = self.bs.shape[1] // self.lvals  # are integers!
+            self.polN = self.ab.shape[1] // self.dim      # and so is he
 #       self.th, self.lfuns = self.gen_lfuns(self.lvals)
 
 #   set up a context manager?
