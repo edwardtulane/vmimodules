@@ -339,6 +339,46 @@ def gen_rect(diam, dens, disp, phi=0):
     #return [y_coord + disp[1], x_coord + disp[0]]
     return [y_rot, x_rot]
 
+def gen_ellipt(diam, dens, disp, phi=0,
+               ecc=1., eta=0.):
+    """
+    Generate a square grid of given diameter and density, correcting for
+    elliptical distortions.
+    The centre is shifted by the displacement vector `disp`, `phi` is the overall rotation
+    of the image, and `eta` is the rotation of the ellipse's axis w.r.t. the original
+    image orientation. The eccentricity `ecc` is supposed to affect the smaller axis.
+    2019-08-01: Looking at this after all this time, it appears that `x` and `y` are 
+                swapped for some reason. I will stick to this convention for now.
+    """
+
+    r0 = (diam - 1) / 2.
+    spc1D = np.linspace(0, diam - 1, dens)
+
+    x_coord, y_coord = np.meshgrid(spc1D, spc1D)
+    
+    x_coord -= r0 #+ disp[0]
+    y_coord -= r0 #+ disp[1]
+                                               # 2019-08-01:
+    cosphi = math.cos(math.radians(phi - eta)) # Here I am not sure, but I think I should
+    sinphi = math.sin(math.radians(phi - eta)) # split the overall rotation into 2 parts, 
+                                               # the first one being `eta` and the second one
+                                               # being the difference `phi - eta`.
+
+    coseta = math.cos(math.radians(eta))
+    sineta = math.sin(math.radians(eta))
+    
+    # These results I have derived using sympy and a few matrix multipications of the form
+    # rot(phi-eta) @ scale(ecc) @ rot(eta) @ [y, x]
+    y_rot = x_coord*(-ecc*coseta*sinphi - cosphi*sineta) + y_coord*(-ecc*sineta*sinphi + coseta*cosphi)
+    x_rot = x_coord*(ecc*coseta*cosphi - sineta*sinphi) + y_coord*(ecc*sineta*cosphi + coseta*sinphi)
+    
+    x_rot += r0 - disp[0]
+    y_rot += r0 - disp[1]
+
+    #return [y_coord + disp[1], x_coord + disp[0]]
+    return [y_rot, x_rot]
+
+
 def gen_polar(radius, radN, polN, disp, phi=0):
     """
     Generate a polar grid of given radius and density in both radius and angles

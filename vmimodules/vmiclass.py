@@ -37,7 +37,7 @@ from . import proc as vmp
 from . import hitdet as hd
 from . import inv as vminv
 from .vis import Plotter
-import seaborn.apionly as sb
+import seaborn as sb
 # sb.set_context('talk') # don't do this!
 
 try:
@@ -190,6 +190,17 @@ class Frame(np.ndarray):
         """ Project the image onto a rectangular grid with given spacing """
         coords = vmp.gen_rect(self.diam, density, self.disp[1:] + displace, 
                               phi = self.offset + self.disp[0] + phi)
+        rect = ndipol.map_coordinates(self.ck, coords, prefilter=False,
+                                      output=np.float_)
+        return CartImg(rect)
+
+
+    def eval_ellipt(self, density=global_dens, displace=[0., 0.], phi=0,
+                    ecc=1., eta=0.):
+        """ Project the image onto a rectangular grid with given spacing """
+        coords = vmp.gen_ellipt(self.diam, density, self.disp[1:] + displace, 
+                              phi = self.offset + self.disp[0] + phi,
+                              ecc=ecc, eta=eta)
         rect = ndipol.map_coordinates(self.ck, coords, prefilter=False,
                                       output=np.float_)
         return CartImg(rect)
